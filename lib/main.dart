@@ -33,6 +33,7 @@ class MyApp extends StatelessWidget {
       ),
       home: Consumer<AuthProvider>(
         builder: (context, auth, child) {
+          print('🏠 MyApp - isLoggedIn: ${auth.isLoggedIn}');
           return auth.isLoggedIn ? const MainScreen() : const LoginScreen();
         },
       ),

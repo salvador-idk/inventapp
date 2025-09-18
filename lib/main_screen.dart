@@ -19,10 +19,17 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    print('🚀 MainScreen iniciado');
+  }
+
   List<Widget> _getWidgetOptions(AuthProvider auth) {
+    print('📱 _getWidgetOptions - isAdmin: ${auth.isAdmin}');
     
     if (auth.isAdmin) {
-      // Admin tiene acceso a todo
+      print('✅ Admin: Mostrando 5 pantallas');
       return <Widget>[
         AgregarItemScreen(),
         InventarioScreen(),
@@ -31,7 +38,7 @@ class _MainScreenState extends State<MainScreen> {
         AuditoriaScreen(),
       ];
     } else {
-      // Empleado solo tiene acceso a compras
+      print('👤 Empleado: Mostrando solo Compras');
       return <Widget>[
         ComprasScreen(),
       ];
@@ -39,48 +46,37 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   List<BottomNavigationBarItem> _getNavItems(AuthProvider auth) {
+    print('🔗 _getNavItems - isAdmin: ${auth.isAdmin}');
+    
     if (auth.isAdmin) {
+      print('✅ Admin: 5 items de navegación');
       return const <BottomNavigationBarItem>[
-        BottomNavigationBarItem(
-          icon: Icon(Icons.add),
-          label: 'Agregar Item',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.inventory),
-          label: 'Inventario',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.shopping_cart),
-          label: 'Compras',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.receipt),
-          label: 'Tickets',
-        ),
-        BottomNavigationBarItem( // ← AÑADIR ESTE ITEM PARA AUDITORÍA
-          icon: Icon(Icons.history),
-          label: 'Auditoría',
-        ),
+        BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Agregar Item'),
+        BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Inventario'),
+        BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Compras'),
+        BottomNavigationBarItem(icon: Icon(Icons.receipt), label: 'Tickets'),
+        BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Auditoría'),
       ];
     } else {
+      print('👤 Empleado: 1 item de navegación');
       return const <BottomNavigationBarItem>[
-        BottomNavigationBarItem(
-          icon: Icon(Icons.shopping_cart),
-          label: 'Compras',
-        ),
+        BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Compras'),
       ];
     }
   }
 
   void _onItemTapped(int index) {
-    // Para empleados, solo permitimos el índice 0 (Compras)
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    print('🖱️ Tap en índice: $index - isEmpleado: ${auth.isEmpleado}');
+    
     if (auth.isEmpleado && index != 0) {
+      print('❌ Empleado no puede navegar a índice: $index');
       return;
     }
     
     setState(() {
       _selectedIndex = index;
+      print('📊 Índice cambiado a: $index');
     });
   }
 
@@ -91,22 +87,13 @@ class _MainScreenState extends State<MainScreen> {
         title: const Text('Cerrar Sesión'),
         content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
           TextButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              
-              // ✅ LOG DE AUDITORÍA PARA LOGOUT
               await AuditService.logLogout(context);
-              
               Provider.of<AuthProvider>(context, listen: false).logout();
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
             },
             child: const Text('Cerrar Sesión'),
           ),
@@ -118,53 +105,60 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    
+    // DEBUG: Verificar estado de autenticación
+    print('🎯 BUILD - Usuario: ${auth.currentUser?.username}');
+    print('🎯 BUILD - Rol: ${auth.currentUser?.role}');
+    print('🎯 BUILD - isAdmin: ${auth.isAdmin}');
+    print('🎯 BUILD - isEmpleado: ${auth.isEmpleado}');
+    print('🎯 BUILD - isLoggedIn: ${auth.isLoggedIn}');
+
     final widgetOptions = _getWidgetOptions(auth);
     final navItems = _getNavItems(auth);
 
-    // Asegurar que el índice seleccionado sea válido
     final indiceSeguro = _selectedIndex.clamp(0, widgetOptions.length - 1);
     if (_selectedIndex != indiceSeguro) {
-      _selectedIndex = indiceSeguro;
+      print('🔄 Ajustando índice de $_selectedIndex a $indiceSeguro');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {
+          _selectedIndex = indiceSeguro;
+        });
+      });
     }
+
+    // DEBUG: Verificar navegación
+    print('📊 Índice actual: $_selectedIndex');
+    print('📊 Widgets disponibles: ${widgetOptions.length}');
+    print('📊 Items de navegación: ${navItems.length}');
+    print('📊 BottomNavigationBar: ${auth.isAdmin ? "VISIBLE" : "OCULTO"}');
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sistema de Inventario'),
         backgroundColor: Colors.blueGrey[700],
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Cerrar Sesión',
-          ),
+          IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Cerrar Sesión'),
           const SizedBox(width: 8),
         ],
       ),
-      body: Consumer<AuthProvider>(
-        builder: (context, auth, child) {
-          return Column(
-            children: [
-              if (auth.isEmpleado)
-                Container(
-                  padding: const EdgeInsets.all(8.0),
-                  color: Colors.blueGrey[100],
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info, size: 16),
-                      const SizedBox(width: 8),
-                      const Text('Modo empleado: solo acceso a compras'),
-                      const Spacer(),
-                      Text(
-                        'Usuario: ${auth.currentUser?.nombre}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(child: widgetOptions[indiceSeguro]),
-            ],
-          );
-        },
+      body: Column(
+        children: [
+          if (auth.isEmpleado)
+            Container(
+              padding: const EdgeInsets.all(8.0),
+              color: Colors.blueGrey[100],
+              child: Row(
+                children: [
+                  const Icon(Icons.info, size: 16),
+                  const SizedBox(width: 8),
+                  const Text('Modo empleado: solo acceso a compras'),
+                  const Spacer(),
+                  Text('Usuario: ${auth.currentUser?.nombre}', style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          Expanded(child: widgetOptions[indiceSeguro]),
+        ],
       ),
       bottomNavigationBar: auth.isAdmin 
           ? BottomNavigationBar(
@@ -172,9 +166,9 @@ class _MainScreenState extends State<MainScreen> {
               currentIndex: indiceSeguro,
               selectedItemColor: Colors.blueGrey[700],
               onTap: _onItemTapped,
-              type: BottomNavigationBarType.fixed, // ← IMPORTANTE para más de 3 items
+              type: BottomNavigationBarType.fixed,
             )
-          : null, // para empleados, no mostramos BottomNavigationBar
+          : null,
     );
   }
 }

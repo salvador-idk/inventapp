@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'database_helper.dart';
 import 'user_model.dart'; // Asegúrate de importar el modelo correcto
 import 'main_screen.dart';
@@ -31,7 +32,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
         if (user != null && user.password == _passwordController.text) {
           // Login exitoso
-          AuthProvider().setCurrentUser(user);
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          Provider.of<AuthProvider>(context, listen: false).setCurrentUser(user);
           
           // ✅ LOG DE AUDITORÍA PARA LOGIN
           await AuditService.logLogin(context);
