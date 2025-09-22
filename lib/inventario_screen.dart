@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'database_helper.dart';
 import 'item_model.dart';
 import 'etiqueta_service.dart';
-import 'agregar_item_screen.dart'; // ← Importación para la edición
-import 'audit_service.dart'; // ← Agregar esta importación
+import 'agregar_item_screen.dart';
+import 'audit_service.dart';
+import 'search_bar.dart'; // ← Necesitas importar el SearchBarWidget
 
 class InventarioScreen extends StatefulWidget {
   const InventarioScreen({Key? key}) : super(key: key);
@@ -14,7 +15,9 @@ class InventarioScreen extends StatefulWidget {
 
 class _InventarioScreenState extends State<InventarioScreen> {
   List<Item> _items = [];
+  List<Item> _filteredItems = [];
   bool _cargando = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -27,6 +30,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
     final items = await dbHelper.getItems();
     setState(() {
       _items = items;
+      _filteredItems = items;
       _cargando = false;
     });
   }
@@ -54,7 +58,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
       try {
         final dbHelper = DatabaseHelper();
         
-        // ✅ LOG DE AUDITORÍA PARA ELIMINACIÓN (ANTES de eliminar)
         await AuditService.logItemDelete(
           context,
           itemId: item.id!,
@@ -100,7 +103,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
     }
   }
 
-  // NUEVO MÉTODO: Editar item
   Future<void> _editarItem(Item item) async {
     final resultado = await Navigator.push(
       context,
@@ -110,7 +112,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
     );
 
     if (resultado == true) {
-      // Recargar items si se editó exitosamente
       await _cargarItems();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Item actualizado exitosamente')),
@@ -118,67 +119,121 @@ class _InventarioScreenState extends State<InventarioScreen> {
     }
   }
 
+  void _onSearch(String query) async {
+    setState(() {
+      _searchQuery = query;
+      _cargando = true;
+    });
+
+    if (query.isEmpty) {
+      setState(() {
+        _filteredItems = _items;
+        _cargando = false;
+      });
+    } else {
+      final dbHelper = DatabaseHelper();
+      final results = await dbHelper.searchItems(query);
+      setState(() {
+        _filteredItems = results;
+        _cargando = false;
+      });
+    }
+  }
+
+  void _onSuggestionSelected(String suggestion) {
+    String searchTerm = suggestion;
+    if (suggestion.startsWith('Serial: ')) {
+      searchTerm = suggestion.replaceFirst('Serial: ', '');
+    } else if (suggestion.startsWith('ID: ')) {
+      searchTerm = suggestion.replaceFirst('ID: ', '');
+    }
+    _onSearch(searchTerm);
+  }
+
+  Widget _buildItemCard(Item item) {
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ListTile(
+        title: Text(item.nombre),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.descripcion),
+            Text('Serial: ${item.serial}'),
+            Text('ID: ${item.numeroIdentificacion}'),
+            Text('Cantidad: ${item.cantidad} - Precio: \$${item.precio.toStringAsFixed(2)}'),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.edit, color: Colors.blue),
+              onPressed: () => _editarItem(item),
+            ),
+            IconButton(
+              icon: Icon(Icons.local_offer, color: Colors.green),
+              onPressed: () => _imprimirEtiquetaExistente(item),
+            ),
+            IconButton(
+              icon: Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _eliminarItem(item),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16.0),
-                  child: const Text(
-                    'Inventario',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Expanded(
-                  child: _items.isEmpty
-                      ? const Center(
-                          child: Text('No hay items en el inventario'),
-                        )
-                      : ListView.builder(
-                          itemCount: _items.length,
-                          itemBuilder: (context, index) {
-                            final item = _items[index];
-                            return Card(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                              child: ListTile(
-                                title: Text(item.nombre),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.descripcion),
-                                    Text('Serial: ${item.serial}'),
-                                    Text('ID: ${item.numeroIdentificacion}'),
-                                    Text('Cantidad: ${item.cantidad} - Precio: \$${item.precio.toStringAsFixed(2)}'),
-                                  ],
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // NUEVO BOTÓN: Editar
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.blue),
-                                      onPressed: () => _editarItem(item),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.local_offer, color: Colors.green),
-                                      onPressed: () => _imprimirEtiquetaExistente(item),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
-                                      onPressed: () => _eliminarItem(item),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+      body: Column(
+        children: [
+          // Barra de búsqueda
+          SearchBarWidget(
+            onSearch: _onSearch,
+            onSuggestionSelected: _onSuggestionSelected,
+          ),
+          
+          // Título
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            child: const Text(
+              'Inventario',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
+          ),
+          
+          // Contenido principal
+          if (_cargando)
+            Center(child: CircularProgressIndicator())
+          else if (_filteredItems.isEmpty && _searchQuery.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'No se encontraron resultados para "$_searchQuery"',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            )
+          else if (_filteredItems.isEmpty)
+            Expanded(
+              child: Center(
+                child: Text('No hay items en el inventario'),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView.builder(
+                itemCount: _filteredItems.length,
+                itemBuilder: (context, index) {
+                  final item = _filteredItems[index];
+                  return _buildItemCard(item);
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

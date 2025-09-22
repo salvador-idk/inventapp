@@ -21,6 +21,34 @@ class Item {
     this.precio = 0.0,
   });
 
+  // Método fromMap que falta
+  factory Item.fromMap(Map<String, dynamic> map) {
+  return Item(
+    id: map['id'],
+    nombre: map['nombre'] ?? '', // ← Evita null
+    descripcion: map['descripcion'] ?? '',
+    serial: map['serial'] ?? '',
+    numeroIdentificacion: map['numeroIdentificacion'] ?? '',
+    imagenPath: map['imagenPath'],
+    cantidad: map['cantidad'] ?? 0, // ← Valor por defecto
+    precio: (map['precio'] as num?)?.toDouble() ?? 0.0, // ← Conversión segura
+  );
+}
+
+  // Método toMap para completar
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'nombre': nombre,
+      'descripcion': descripcion,
+      'serial': serial,
+      'numeroIdentificacion': numeroIdentificacion,
+      'imagenPath': imagenPath,
+      'cantidad': cantidad,
+      'precio': precio,
+    };
+  }
+
   String toQRData() {
     return 'Nombre: $nombre\nID: $id\nSerial: $serial\nDescripción: $descripcion\nCantidad: $cantidad\nPrecio: \$$precio';
   }

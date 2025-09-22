@@ -76,6 +76,12 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // ✅ Reemplaza el FlutterLogo con tu logo
+              Image.asset(
+                'assets/images/logo.png',
+                height: 100,
+                width: 100,
+              ),
               const FlutterLogo(size: 100),
               const SizedBox(height: 30),
               const Text(

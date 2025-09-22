@@ -241,18 +241,9 @@ Future<List<Item>> getItems() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('items');
 
-    return List.generate(maps.length, (i) {
-      return Item(
-        id: maps[i]['id'],
-        nombre: maps[i]['nombre'],
-        descripcion: maps[i]['descripcion'],
-        serial: maps[i]['serial'],
-        numeroIdentificacion: maps[i]['numeroIdentificacion'],
-        imagenPath: maps[i]['imagenPath'],
-        cantidad: maps[i]['cantidad'],
-        precio: maps[i]['precio'],
-      );
-    });
+    // ✅ Usar fromMap aquí también
+    return maps.map((map) => Item.fromMap(map)).toList();
+    
   } catch (e) {
     print('❌ Error obteniendo items: $e');
     return [];
@@ -389,6 +380,62 @@ Future<AppUser?> getUserByUsername(String username) async {
       return [];
     }
   }
+
+  //busqueda inteligente
+  // database_helper.dart - Agrega estos métodos
+
+Future<List<Item>> searchItems(String query) async {
+  try {
+    final db = await database;
+    // Búsqueda case-insensitive
+    final searchTerm = query.toLowerCase();
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'items',
+      where: 'LOWER(nombre) LIKE ? OR LOWER(serial) LIKE ? OR LOWER(numeroIdentificacion) LIKE ?',
+      whereArgs: ['%$searchTerm%', '%$searchTerm%', '%$searchTerm%'],
+    );
+
+    // ✅ Usando fromMap - Más limpio y mantenible
+    return maps.map((map) => Item.fromMap(map)).toList();
+    
+  } catch (e) {
+    print('❌ Error en búsqueda: $e');
+    return [];
+  }
+}
+
+Future<List<String>> getSearchSuggestions(String query) async {
+  try {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'items',
+      columns: ['nombre', 'serial', 'numeroIdentificacion'],
+      where: 'nombre LIKE ? OR serial LIKE ? OR numeroIdentificacion LIKE ?',
+      whereArgs: ['%$query%', '%$query%', '%$query%'],
+      limit: 5, // Limitar sugerencias
+    );
+
+    // Combinar todas las coincidencias en una lista
+    final suggestions = <String>[];
+    for (final map in maps) {
+      if (map['nombre'].toString().toLowerCase().contains(query.toLowerCase())) {
+        suggestions.add(map['nombre']);
+      }
+      if (map['serial'].toString().toLowerCase().contains(query.toLowerCase())) {
+        suggestions.add('Serial: ${map['serial']}');
+      }
+      if (map['numeroIdentificacion'].toString().toLowerCase().contains(query.toLowerCase())) {
+        suggestions.add('ID: ${map['numeroIdentificacion']}');
+      }
+    }
+
+    return suggestions.toSet().toList(); // Eliminar duplicados
+  } catch (e) {
+    print('❌ Error obteniendo sugerencias: $e');
+    return [];
+  }
+}
 
   Future<void> close() async {
     if (_database != null) {
