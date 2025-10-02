@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'login_screen.dart';
-import 'main_screen.dart';
-import 'auth_provider.dart';
-import 'database_helper.dart';
+import '/screens/login_screen.dart';
+import '/screens/main_screen.dart';
+import '/providers/auth_provider.dart';
+import '/services/database_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

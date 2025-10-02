@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui' as ui; // ← Agrega esta línea
-import 'database_helper.dart';
-import 'audit_model.dart';
-import 'excel_export_service.dart';
-import 'auth_provider.dart';
+import '/services/database_helper.dart';
+import '/models/audit_model.dart';
+import '/utils/excel_export_service.dart';
+import '/providers/auth_provider.dart';
 
 class AuditoriaScreen extends StatefulWidget {
   const AuditoriaScreen({Key? key}) : super(key: key);

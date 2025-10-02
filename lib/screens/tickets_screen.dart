@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // ← Importar intl para DateFormat
-import 'database_helper.dart';
-import 'item_model.dart';
-import 'ticket_service.dart';
+import '/services/database_helper.dart';
+import '/models/item_model.dart';
+import '/utils/ticket_service.dart';
+import '/models/ticket_model.dart';
 
 class TicketsScreen extends StatefulWidget {
   const TicketsScreen({Key? key}) : super(key: key);

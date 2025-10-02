@@ -3,7 +3,8 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
-import 'item_model.dart';
+import '/models/item_model.dart';
+import '/models/ticket_model.dart';
 
 class TicketService {
   static Future<void> imprimirTicket(TicketVenta ticket, BuildContext context) async {

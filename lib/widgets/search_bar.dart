@@ -1,6 +1,6 @@
 // search_bar.dart
 import 'package:flutter/material.dart';
-import 'database_helper.dart';
+import '../services/database_helper.dart';
 
 class SearchBarWidget extends StatefulWidget {
   final ValueChanged<String> onSearch;

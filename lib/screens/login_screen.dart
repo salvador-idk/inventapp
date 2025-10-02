@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'database_helper.dart';
-import 'user_model.dart'; // Asegúrate de importar el modelo correcto
+import '/services/database_helper.dart';
+import '/models/user_model.dart'; // Asegúrate de importar el modelo correcto
 import 'main_screen.dart';
-import 'auth_provider.dart';
-import 'audit_service.dart'; // ← Agregar esta importación
+import '../providers/auth_provider.dart';
+import '/utils/audit_service.dart'; // ← Agregar esta importación
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -79,8 +79,11 @@ class _LoginScreenState extends State<LoginScreen> {
               // ✅ Reemplaza el FlutterLogo con tu logo
               Image.asset(
                 'assets/images/logo.png',
-                height: 100,
-                width: 100,
+                height: 120,
+                width: 120,
+                errorBuilder:(context, error, stackTrace){
+                  return Icon(Icons.inventory_2, size: 100); //Fallback si la imagen no carga
+                },
               ),
               const FlutterLogo(size: 100),
               const SizedBox(height: 30),

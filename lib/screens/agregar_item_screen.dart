@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'database_helper.dart';
-import 'item_model.dart';
-import 'etiqueta_service.dart';
-import 'audit_service.dart';
+import '/services/database_helper.dart';
+import '/models/item_model.dart';
+import '/utils/etiqueta_service.dart';
+import '/utils/audit_service.dart';
 
 class AgregarItemScreen extends StatefulWidget {
   final Item? itemParaEditar;

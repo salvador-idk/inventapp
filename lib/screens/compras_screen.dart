@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'database_helper.dart';
-import 'item_model.dart';
-import 'ticket_service.dart';
-import 'search_bar.dart';
+import '/services/database_helper.dart';
+import '/models/item_model.dart';
+import '/utils/ticket_service.dart';
+import '/widgets/search_bar.dart';
+import '/models/ticket_model.dart';
 
 class ComprasScreen extends StatefulWidget {
   const ComprasScreen({Key? key}) : super(key: key);

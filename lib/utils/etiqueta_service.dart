@@ -5,7 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'dart:ui' as ui;
-import 'item_model.dart';
+import '/models/item_model.dart';
 
 class EtiquetaService {
   static Future<void> imprimirEtiqueta(Item item, BuildContext context) async {

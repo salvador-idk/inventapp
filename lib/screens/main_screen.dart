@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:inventario_app/auditoria_screen.dart';
+import '/screens/auditoria_screen.dart';
 import 'package:provider/provider.dart';
 import 'agregar_item_screen.dart';
 import 'inventario_screen.dart';
 import 'compras_screen.dart';
 import 'tickets_screen.dart';
-import 'auth_provider.dart';
+import '../providers/auth_provider.dart';
 import 'login_screen.dart';
-import 'audit_service.dart'; 
+import '/utils/audit_service.dart'; 
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);

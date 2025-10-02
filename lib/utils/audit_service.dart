@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'database_helper.dart';
-import 'auth_provider.dart';
-import 'audit_model.dart';
+import '/services/database_helper.dart';
+import '../providers/auth_provider.dart';
+import '/models/audit_model.dart';
 
 class AuditService {
   static Future<void> logAction({

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'database_helper.dart';
-import 'item_model.dart';
-import 'etiqueta_service.dart';
+import '/services/database_helper.dart';
+import '/models/item_model.dart';
+import '/utils/etiqueta_service.dart';
 import 'agregar_item_screen.dart';
-import 'audit_service.dart';
-import 'search_bar.dart'; // ← Necesitas importar el SearchBarWidget
+import '/utils/audit_service.dart';
+import '/widgets/search_bar.dart'; // ← Necesitas importar el SearchBarWidget
 
 class InventarioScreen extends StatefulWidget {
   const InventarioScreen({Key? key}) : super(key: key);
