@@ -13,9 +13,10 @@ class EtiquetaService {
       // Crear el PDF de la etiqueta
       final pdf = pw.Document();
       
-      // Tamaño de etiqueta: 2cm x 6cm (56.7 x 170.1 puntos, 1cm = 28.35 puntos)
-      final etiquetaAncho = 141.75; // 5cm
-      final etiquetaAlto = 198.45; // 7cm
+      // Tamaño de etiqueta: 2.5cm x 5cm
+      //1cm = 28.35 puntos
+      final etiquetaAlto = 7141.75; // 7cm
+      final etiquetaAncho = 70.875; // 5cm
       
       pdf.addPage(
         pw.Page(
