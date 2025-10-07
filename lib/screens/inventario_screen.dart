@@ -1,12 +1,62 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import '/services/database_helper.dart';
 import '/models/item_model.dart';
 import '/utils/etiqueta_service.dart';
 import 'agregar_item_screen.dart';
 import '/utils/audit_service.dart';
-import '/widgets/search_bar.dart'; // ← Necesitas importar el SearchBarWidget
+import '/widgets/search_bar.dart';
+
+// ✅ AGREGAR: Modelo de FiltrosBusqueda
+class FiltrosBusqueda {
+  final String query;
+  final double? precioMin;
+  final double? precioMax;
+  final int? stockMin;
+  final int? stockMax;
+  final int? categoriaId;
+  final bool soloStockBajo;
+
+  const FiltrosBusqueda({
+    this.query = '',
+    this.precioMin,
+    this.precioMax,
+    this.stockMin,
+    this.stockMax,
+    this.categoriaId,
+    this.soloStockBajo = false,
+  });
+
+  FiltrosBusqueda copyWith({
+    String? query,
+    double? precioMin,
+    double? precioMax,
+    int? stockMin,
+    int? stockMax,
+    int? categoriaId,
+    bool? soloStockBajo,
+  }) {
+    return FiltrosBusqueda(
+      query: query ?? this.query,
+      precioMin: precioMin ?? this.precioMin,
+      precioMax: precioMax ?? this.precioMax,
+      stockMin: stockMin ?? this.stockMin,
+      stockMax: stockMax ?? this.stockMax,
+      categoriaId: categoriaId ?? this.categoriaId,
+      soloStockBajo: soloStockBajo ?? this.soloStockBajo,
+    );
+  }
+
+  bool get tieneFiltros {
+    return query.isNotEmpty ||
+        precioMin != null ||
+        precioMax != null ||
+        stockMin != null ||
+        stockMax != null ||
+        categoriaId != null ||
+        soloStockBajo;
+  }
+}
 
 class InventarioScreen extends StatefulWidget {
   const InventarioScreen({Key? key}) : super(key: key);
@@ -20,6 +70,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
   List<Item> _filteredItems = [];
   bool _cargando = true;
   String _searchQuery = '';
+  FiltrosBusqueda _filtros = const FiltrosBusqueda(); // ✅ INICIALIZAR
 
   @override
   void initState() {
@@ -125,7 +176,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListTile(
-        // ✅ AGREGAR IMAGEN A LA IZQUIERDA
         leading: _buildItemImage(item),
         title: Text(
           item.nombre,
@@ -162,13 +212,11 @@ class _InventarioScreenState extends State<InventarioScreen> {
             ),
           ],
         ),
-        // ✅ HACER TAPPABLE PARA VER DETALLES CON IMAGEN
         onTap: () => _mostrarDetallesItem(item),
       ),
     );
   }
 
-  // ✅ NUEVO MÉTODO: CONSTRUIR WIDGET DE IMAGEN
   Widget _buildItemImage(Item item) {
     if (item.imagenPath != null) {
       try {
@@ -198,7 +246,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
     }
   }
 
-  // ✅ ICONO PLACEHOLDER CUANDO NO HAY IMAGEN
   Widget _buildPlaceholderIcon() {
     return Container(
       width: 50,
@@ -211,7 +258,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
     );
   }
 
-  // ✅ NUEVO MÉTODO: MOSTRAR DETALLES CON IMAGEN GRANDE
   void _mostrarDetallesItem(Item item) {
     showDialog(
       context: context,
@@ -222,7 +268,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // IMAGEN GRANDE EN DETALLES
               if (item.imagenPath != null)
                 Container(
                   width: double.infinity,
@@ -256,8 +301,8 @@ class _InventarioScreenState extends State<InventarioScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.inventory_2, size: 50, color: Colors.grey),
-                        SizedBox(height: 8),
+                        const Icon(Icons.inventory_2, size: 50, color: Colors.grey),
+                        const SizedBox(height: 8),
                         Text('Sin imagen', style: TextStyle(color: Colors.grey)),
                       ],
                     ),
@@ -266,7 +311,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
               
               const SizedBox(height: 16),
               
-              // INFORMACIÓN DEL ITEM
               _buildDetailRow('Descripción:', item.descripcion),
               _buildDetailRow('Número de Serie:', item.serial),
               _buildDetailRow('ID:', item.numeroIdentificacion),
@@ -292,7 +336,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
     );
   }
 
-  // ✅ MÉTODO AUXILIAR PARA FILAS DE DETALLE
   Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -311,7 +354,270 @@ class _InventarioScreenState extends State<InventarioScreen> {
       ),
     );
   }
-  
+
+  // ✅ ALERTAS DE STOCK BAJO
+  Widget _buildStockBajoHeader() {
+    final itemsStockBajo = _items.where((item) => item.cantidad <= 5).toList();
+    
+    if (itemsStockBajo.isEmpty) return const SizedBox.shrink();
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      color: Colors.orange[50],
+      child: Row(
+        children: [
+          Icon(Icons.warning, color: Colors.orange[800]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${itemsStockBajo.length} productos con stock bajo (≤ 5 unidades)',
+              style: TextStyle(
+                color: Colors.orange[800],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _mostrarStockBajoDetalle,
+            child: Text(
+              'Ver detalles',
+              style: TextStyle(color: Colors.orange[800]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _mostrarStockBajoDetalle() {
+    final itemsStockBajo = _items.where((item) => item.cantidad <= 5).toList();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Productos con Stock Bajo'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: itemsStockBajo.length,
+            itemBuilder: (context, index) {
+              final item = itemsStockBajo[index];
+              return ListTile(
+                leading: _buildItemImage(item),
+                title: Text(item.nombre),
+                subtitle: Text('Stock: ${item.cantidad} - Precio: \$${item.precio.toStringAsFixed(2)}'),
+                trailing: Text(
+                  '${item.cantidad}',
+                  style: TextStyle(
+                    color: item.cantidad == 0 ? Colors.red : Colors.orange,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ FILTROS DE BÚSQUEDA
+  Widget _buildFiltrosHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _filtros.tieneFiltros ? 'Filtros activos' : 'Sin filtros',
+              style: TextStyle(
+                color: _filtros.tieneFiltros ? Colors.blue : Colors.grey,
+                fontWeight: _filtros.tieneFiltros ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: _mostrarDialogoFiltros,
+            tooltip: 'Filtrar items',
+          ),
+          if (_filtros.tieneFiltros)
+            IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: _limpiarFiltros,
+              tooltip: 'Limpiar filtros',
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _mostrarDialogoFiltros() {
+    final precioMinController = TextEditingController(text: _filtros.precioMin?.toString());
+    final precioMaxController = TextEditingController(text: _filtros.precioMax?.toString());
+    final stockMinController = TextEditingController(text: _filtros.stockMin?.toString());
+    final stockMaxController = TextEditingController(text: _filtros.stockMax?.toString());
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Filtrar Items'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Filtro por precio
+                  const Text('Precio:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: precioMinController,
+                          decoration: const InputDecoration(labelText: 'Mínimo'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: precioMaxController,
+                          decoration: const InputDecoration(labelText: 'Máximo'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Filtro por stock
+                  const Text('Stock:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: stockMinController,
+                          decoration: const InputDecoration(labelText: 'Mínimo'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: stockMaxController,
+                          decoration: const InputDecoration(labelText: 'Máximo'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Filtro stock bajo
+                  CheckboxListTile(
+                    title: const Text('Solo stock bajo (≤ 5 unidades)'),
+                    value: _filtros.soloStockBajo,
+                    onChanged: (value) {
+                      setState(() {
+                        _filtros = _filtros.copyWith(soloStockBajo: value);
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () {
+                  _aplicarFiltros(
+                    precioMin: double.tryParse(precioMinController.text),
+                    precioMax: double.tryParse(precioMaxController.text),
+                    stockMin: int.tryParse(stockMinController.text),
+                    stockMax: int.tryParse(stockMaxController.text),
+                  );
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Aplicar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _aplicarFiltros({
+    double? precioMin,
+    double? precioMax,
+    int? stockMin,
+    int? stockMax,
+  }) {
+    setState(() {
+      _filtros = _filtros.copyWith(
+        precioMin: precioMin,
+        precioMax: precioMax,
+        stockMin: stockMin,
+        stockMax: stockMax,
+      );
+      _aplicarFiltrosYBusqueda();
+    });
+  }
+
+  void _limpiarFiltros() {
+    setState(() {
+      _filtros = const FiltrosBusqueda();
+      _aplicarFiltrosYBusqueda();
+    });
+  }
+
+  void _aplicarFiltrosYBusqueda() {
+    List<Item> resultados = _items;
+    
+    // Aplicar filtros
+    if (_filtros.precioMin != null) {
+      resultados = resultados.where((item) => item.precio >= _filtros.precioMin!).toList();
+    }
+    if (_filtros.precioMax != null) {
+      resultados = resultados.where((item) => item.precio <= _filtros.precioMax!).toList();
+    }
+    if (_filtros.stockMin != null) {
+      resultados = resultados.where((item) => item.cantidad >= _filtros.stockMin!).toList();
+    }
+    if (_filtros.stockMax != null) {
+      resultados = resultados.where((item) => item.cantidad <= _filtros.stockMax!).toList();
+    }
+    if (_filtros.soloStockBajo) {
+      resultados = resultados.where((item) => item.cantidad <= 5).toList();
+    }
+    
+    // Aplicar búsqueda de texto
+    if (_searchQuery.isNotEmpty) {
+      resultados = resultados.where((item) =>
+          item.nombre.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          item.serial.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          item.numeroIdentificacion.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    }
+    
+    setState(() {
+      _filteredItems = resultados;
+    });
+  }
 
   void _onSearch(String query) async {
     setState(() {
@@ -332,6 +638,10 @@ class _InventarioScreenState extends State<InventarioScreen> {
         _cargando = false;
       });
     }
+    
+    // Actualizar filtros con la nueva búsqueda
+    _filtros = _filtros.copyWith(query: query);
+    _aplicarFiltrosYBusqueda();
   }
 
   void _onSuggestionSelected(String suggestion) {
@@ -344,8 +654,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
     _onSearch(searchTerm);
   }
 
-  
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -356,6 +664,12 @@ class _InventarioScreenState extends State<InventarioScreen> {
             onSearch: _onSearch,
             onSuggestionSelected: _onSuggestionSelected,
           ),
+          
+          // ✅ FILTROS
+          _buildFiltrosHeader(),
+          
+          // ✅ ALERTAS DE STOCK BAJO
+          _buildStockBajoHeader(),
           
           // Título
           Container(
@@ -374,7 +688,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
               padding: const EdgeInsets.all(20),
               child: Text(
                 'No se encontraron resultados para "$_searchQuery"',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
             )
           else if (_filteredItems.isEmpty)
@@ -383,9 +697,9 @@ class _InventarioScreenState extends State<InventarioScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.inventory_2, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text('No hay items en el inventario', style: TextStyle(fontSize: 16)),
+                    const Icon(Icons.inventory_2, size: 64, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    const Text('No hay items en el inventario', style: TextStyle(fontSize: 16)),
                   ],
                 ),
               ),

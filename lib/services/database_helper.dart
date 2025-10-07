@@ -1,5 +1,8 @@
 import 'dart:io' as sql;
 
+import 'package:inventario_app/models/categoria_model.dart';
+
+import '../services/carrito_service.dart';
 import 'package:sqflite/sqflite.dart' as sql;
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -84,7 +87,7 @@ class DatabaseHelper {
     
     return await sql.openDatabase(
       dbPath,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -122,6 +125,36 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
+  CREATE TABLE IF NOT EXISTS categorias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL UNIQUE,
+    descripcion TEXT,
+    color TEXT NOT NULL
+  )
+''');
+
+// Método para categorías por defecto
+Future<void> _insertarCategoriasPorDefecto(Database db) async {
+  final categorias = [
+    {'nombre': 'Electrónicos', 'color': 'FF5722'},
+    {'nombre': 'Ropa', 'color': '2196F3'},
+    {'nombre': 'Hogar', 'color': '4CAF50'},
+    {'nombre': 'Deportes', 'color': '9C27B0'},
+    {'nombre': 'Libros', 'color': '607D8B'},
+    {'nombre': 'Otros', 'color': '795548'},
+  ];
+
+  for (final categoria in categorias) {
+    await db.insert('categorias', categoria, 
+      conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+}
+
+// Insertar categorías por defecto
+await _insertarCategoriasPorDefecto(db);
+
+
+    await db.execute('''
       CREATE TABLE tickets(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         fecha TEXT NOT NULL,
@@ -156,6 +189,8 @@ class DatabaseHelper {
         created_at TEXT NOT NULL
       )
     ''');
+
+    
     
     // Insertar usuarios por defecto
     await db.insert('users', {
@@ -173,6 +208,8 @@ class DatabaseHelper {
       'nombre': 'Empleado',
       'email': 'empleado@inventario.com'
     });
+
+    await CarritoService.crearTabla(db);
     
     print('✅ Tablas creadas exitosamente');
   }
@@ -243,6 +280,34 @@ class DatabaseHelper {
       ''');
       print('✅ Tabla audit_logs creada en migración');
     }
+    // ✅ AGREGAR ESTA MIGRACIÓN PARA CATEGORÍAS
+  if (oldVersion < 5) {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS categorias(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL UNIQUE,
+        descripcion TEXT,
+        color TEXT NOT NULL
+      )
+    ''');
+    
+    // Insertar categorías por defecto
+    final categorias = [
+      {'nombre': 'Electrónicos', 'color': 'FF5722', 'descripcion': 'Productos electrónicos'},
+      {'nombre': 'Ropa', 'color': '2196F3', 'descripcion': 'Prendas de vestir'},
+      {'nombre': 'Hogar', 'color': '4CAF50', 'descripcion': 'Artículos para el hogar'},
+      {'nombre': 'Deportes', 'color': '9C27B0', 'descripcion': 'Equipamiento deportivo'},
+      {'nombre': 'Libros', 'color': '607D8B', 'descripcion': 'Libros y material de lectura'},
+      {'nombre': 'Otros', 'color': '795548', 'descripcion': 'Otras categorías'},
+    ];
+
+    for (final categoria in categorias) {
+      await db.insert('categorias', categoria, 
+        conflictAlgorithm: sql.ConflictAlgorithm.ignore);
+    }
+    
+    print('✅ Tabla categorías creada en migración');
+  }
   }
 
   // MÉTODOS PRINCIPALES
@@ -491,6 +556,65 @@ class DatabaseHelper {
     if (_database != null) {
       await _database!.close();
       _database = null;
+    }
+  }
+
+  // ✅ NUEVO: Métodos para categorías
+  Future<List<Categoria>> getCategorias() async {
+    if (_isWeb) return [];
+    
+    try {
+      final db = await database;
+      final resultados = await db.query('categorias', orderBy: 'nombre');
+      return resultados.map((map) => Categoria.fromMap(map)).toList();
+    } catch (e) {
+      print('❌ Error obteniendo categorías: $e');
+      return [];
+    }
+  }
+
+  Future<int> insertCategoria(Categoria categoria) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final db = await database;
+      return await db.insert('categorias', categoria.toMap());
+    } catch (e) {
+      print('❌ Error insertando categoría: $e');
+      rethrow;
+    }
+  }
+
+  Future<int> updateCategoria(Categoria categoria) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final db = await database;
+      return await db.update(
+        'categorias',
+        categoria.toMap(),
+        where: 'id = ?',
+        whereArgs: [categoria.id],
+      );
+    } catch (e) {
+      print('❌ Error actualizando categoría: $e');
+      rethrow;
+    }
+  }
+
+  Future<int> deleteCategoria(int id) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final db = await database;
+      return await db.delete(
+        'categorias',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      print('❌ Error eliminando categoría: $e');
+      rethrow;
     }
   }
 }

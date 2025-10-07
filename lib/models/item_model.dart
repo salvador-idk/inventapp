@@ -9,6 +9,7 @@ class Item {
   String? imagenPath;
   int cantidad;
   double precio;
+  int? categoriaId;
 
   Item({
     this.id,
@@ -19,6 +20,7 @@ class Item {
     this.imagenPath,
     this.cantidad = 0,
     this.precio = 0.0,
+    this.categoriaId,
   });
 
   // Método fromMap que falta
@@ -32,6 +34,7 @@ class Item {
     imagenPath: map['imagenPath'],
     cantidad: map['cantidad'] ?? 0,
     precio: (map['precio'] as num?)?.toDouble() ?? 0.0,
+    categoriaId: map['categoriaId'],
   );
 }
 
@@ -46,6 +49,7 @@ class Item {
       'imagenPath': imagenPath,
       'cantidad': cantidad,
       'precio': precio,
+      'categoriaId': categoriaId,
     };
   }
 
@@ -90,6 +94,7 @@ class Item {
     String? imagenPath,
     int? cantidad,
     double? precio,
+    int? categoriaId
   }) {
     return Item(
       id: id ?? this.id,
@@ -100,6 +105,7 @@ class Item {
       imagenPath: imagenPath ?? this.imagenPath,
       cantidad: cantidad ?? this.cantidad,
       precio: precio ?? this.precio,
+      categoriaId: categoriaId ?? this.categoriaId,
     );
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:inventario_app/screens/dashboard_screen.dart';
+import 'package:inventario_app/screens/gestion_categorias_screen.dart';
 import '/screens/auditoria_screen.dart';
 import 'package:provider/provider.dart';
 import 'agregar_item_screen.dart';
@@ -7,7 +9,7 @@ import 'compras_screen.dart';
 import 'tickets_screen.dart';
 import '../providers/auth_provider.dart';
 import 'login_screen.dart';
-import '/utils/audit_service.dart'; 
+import '/utils/audit_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -29,8 +31,10 @@ class _MainScreenState extends State<MainScreen> {
     print('📱 _getWidgetOptions - isAdmin: ${auth.isAdmin}');
     
     if (auth.isAdmin) {
-      print('✅ Admin: Mostrando 5 pantallas');
+      print('✅ Admin: Mostrando 7 pantallas');
       return <Widget>[
+        DashboardScreen(),
+        GestionCategoriasScreen(),
         AgregarItemScreen(),
         InventarioScreen(),
         ComprasScreen(),
@@ -49,8 +53,10 @@ class _MainScreenState extends State<MainScreen> {
     print('🔗 _getNavItems - isAdmin: ${auth.isAdmin}');
     
     if (auth.isAdmin) {
-      print('✅ Admin: 5 items de navegación');
+      print('✅ Admin: 7 items de navegación');
       return const <BottomNavigationBarItem>[
+        BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
+        BottomNavigationBarItem(icon: Icon(Icons.category), label: 'Categorías'),
         BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Agregar Item'),
         BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Inventario'),
         BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Compras'),

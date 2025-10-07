@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '/services/database_helper.dart';
 import '/models/item_model.dart';
+import '/models/categoria_model.dart';
 import '/utils/etiqueta_service.dart';
 import '/utils/audit_service.dart';
 
@@ -33,15 +34,27 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
   bool _imagenRequerida = false;
   bool _modoEdicion = false; 
 
+  List<Categoria> _categorias = [];
+  int? _categoriaSeleccionada;
+
   @override
   void initState(){
     super.initState();
+    _cargarCategorias();
 
     // Si estamos editando, precargar los datos
     _modoEdicion = widget.itemParaEditar != null;
     if (_modoEdicion){
       _cargarDatosParaEdicion();
     }
+  }
+
+  Future<void> _cargarCategorias() async {
+    final dbHelper = DatabaseHelper();
+    final categorias = await dbHelper.getCategorias();
+    setState(() {
+      _categorias = categorias;
+    });
   }
 
   void _cargarDatosParaEdicion(){
@@ -52,6 +65,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     _idController.text = item.numeroIdentificacion;
     _cantidadController.text = item.cantidad.toString();
     _precioController.text = item.precio.toString();
+    _categoriaSeleccionada = item.categoriaId; // ✅ CARGAR CATEGORÍA
 
     if(item.imagenPath != null){
       _imagen = File(item.imagenPath!);
@@ -88,6 +102,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
       _guardando = true;
     });
 
+    // ✅ CREAR ITEM CON CATEGORÍA
     final item = Item(
       id: _modoEdicion ? widget.itemParaEditar!.id : null,
       nombre: _nombreController.text,
@@ -97,6 +112,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
       imagenPath: _imagen?.path,
       cantidad: int.parse(_cantidadController.text),
       precio: double.parse(_precioController.text),
+      categoriaId: _categoriaSeleccionada, // ✅ INCLUIR CATEGORÍA
     );
 
     try {
@@ -138,6 +154,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
             'numeroIdentificacion': widget.itemParaEditar!.numeroIdentificacion,
             'precio': widget.itemParaEditar!.precio,
             'cantidad': widget.itemParaEditar!.cantidad,
+            'categoriaId': widget.itemParaEditar!.categoriaId,
           }),
           newData: jsonEncode({
             'nombre': item.nombre,
@@ -146,6 +163,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
             'numeroIdentificacion': item.numeroIdentificacion,
             'precio': item.precio,
             'cantidad': item.cantidad,
+            'categoriaId': item.categoriaId,
           }),
           itemName: item.nombre,
         );
@@ -186,6 +204,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
           imagenPath: item.imagenPath,
           cantidad: item.cantidad,
           precio: item.precio,
+          categoriaId: item.categoriaId, // ✅ INCLUIR CATEGORÍA
         );
 
         setState(() {
@@ -309,10 +328,9 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
       _imagen = null;
       _itemGuardado = null;
       _imagenRequerida = false;
+      _categoriaSeleccionada = null; // ✅ LIMPIAR CATEGORÍA
     });
   }
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -359,6 +377,49 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
+                    
+                    // ✅ DROPDOWN DE CATEGORÍAS (DENTRO DEL BUILD)
+                    DropdownButtonFormField<int>(
+                      value: _categoriaSeleccionada,
+                      decoration: const InputDecoration(
+                        labelText: 'Categoría',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('Sin categoría'),
+                        ),
+                        ..._categorias.map((categoria) => DropdownMenuItem(
+                          value: categoria.id,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: categoria.colorMaterial,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(categoria.nombre),
+                            ],
+                          ),
+                        )).toList(),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _categoriaSeleccionada = value;
+                        });
+                      },
+                      validator: (value) {
+                        // Opcional: agregar validación si quieres que sea requerido
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
                     TextFormField(
                       controller: _serialController,
                       decoration: const InputDecoration(
