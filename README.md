@@ -34,7 +34,7 @@ Sistema completo de gestión de inventario desarrollado en Flutter.
 git clone https://github.com/tuusuario/inventario-app.git
 
 # Entrar al directorio
-cd inventario-app
+cd inventapp
 
 # Instalar dependencias
 flutter pub get
