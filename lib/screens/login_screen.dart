@@ -85,8 +85,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   return Icon(Icons.inventory_2, size: 100); //Fallback si la imagen no carga
                 },
               ),
-              const FlutterLogo(size: 100),
-              const SizedBox(height: 30),
+              //const FlutterLogo(size: 100),
+              //const SizedBox(height: 30),
               const Text(
                 'Sistema de Inventario',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
