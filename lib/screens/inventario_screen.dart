@@ -1,20 +1,22 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '/services/database_helper.dart';
+import '/services/inventory_service.dart'; // ✅ USAR INVENTORY SERVICE
 import '/models/item_model.dart';
 import '/utils/etiqueta_service.dart';
 import 'agregar_item_screen.dart';
 import '/utils/audit_service.dart';
 import '/widgets/search_bar.dart';
 
-// ✅ AGREGAR: Modelo de FiltrosBusqueda
+// ✅ MODELO DE FILTROS DE BÚSQUEDA
 class FiltrosBusqueda {
   final String query;
   final double? precioMin;
   final double? precioMax;
   final int? stockMin;
   final int? stockMax;
-  final int? categoriaId;
+  final String? categoriaId; // ✅ CAMBIAR A String
   final bool soloStockBajo;
 
   const FiltrosBusqueda({
@@ -33,7 +35,7 @@ class FiltrosBusqueda {
     double? precioMax,
     int? stockMin,
     int? stockMax,
-    int? categoriaId,
+    String? categoriaId, // ✅ CAMBIAR A String
     bool? soloStockBajo,
   }) {
     return FiltrosBusqueda(
@@ -70,7 +72,12 @@ class _InventarioScreenState extends State<InventarioScreen> {
   List<Item> _filteredItems = [];
   bool _cargando = true;
   String _searchQuery = '';
-  FiltrosBusqueda _filtros = const FiltrosBusqueda(); // ✅ INICIALIZAR
+  FiltrosBusqueda _filtros = const FiltrosBusqueda();
+
+  // ✅ GET INVENTORY SERVICE INSTANCE
+  InventoryService get _inventoryService {
+    return Provider.of<InventoryService>(context, listen: false);
+  }
 
   @override
   void initState() {
@@ -78,14 +85,34 @@ class _InventarioScreenState extends State<InventarioScreen> {
     _cargarItems();
   }
 
+  // ✅ USAR INVENTORY SERVICE EN LUGAR DE DATABASE HELPER DIRECTAMENTE
   Future<void> _cargarItems() async {
-    final dbHelper = DatabaseHelper();
-    final items = await dbHelper.getItems();
-    setState(() {
-      _items = items;
-      _filteredItems = items;
-      _cargando = false;
-    });
+    try {
+      setState(() {
+        _cargando = true;
+      });
+
+      // Usar InventoryService que maneja tanto SQLite como Firestore
+      final items = await _inventoryService.getAllItems();
+      
+      setState(() {
+        _items = items;
+        _filteredItems = items;
+        _cargando = false;
+      });
+    } catch (e) {
+      print('❌ Error cargando items: $e');
+      setState(() {
+        _cargando = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error cargando inventario: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _eliminarItem(Item item) async {
@@ -109,15 +136,16 @@ class _InventarioScreenState extends State<InventarioScreen> {
 
     if (confirmacion == true) {
       try {
-        final dbHelper = DatabaseHelper();
+        // ✅ USAR INVENTORY SERVICE EN LUGAR DE DATABASE HELPER DIRECTAMENTE
+        await _inventoryService.deleteItem(item.id!);
         
+        // ✅ LOG DE AUDITORÍA
         await AuditService.logItemDelete(
           context,
-          itemId: item.id!,
+          itemId: _safeStringToInt(item.id), // ✅ AGREGAR ESTE MÉTODO AL INVENTARIO SCREEN
           itemName: item.nombre,
         );
-        
-        await dbHelper.deleteItem(item.id!);
+
         await _cargarItems();
         
         ScaffoldMessenger.of(context).showSnackBar(
@@ -130,6 +158,12 @@ class _InventarioScreenState extends State<InventarioScreen> {
         );
       }
     }
+  }
+
+  // ✅ AGREGAR ESTE MÉTODO AL INVENTARIO SCREEN
+  int _safeStringToInt(String? value) {
+    if (value == null || value.isEmpty) return 0;
+    return int.tryParse(value) ?? 0;
   }
 
   Future<void> _imprimirEtiquetaExistente(Item item) async {
@@ -175,6 +209,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
   Widget _buildItemCard(Item item) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 2,
       child: ListTile(
         leading: _buildItemImage(item),
         title: Text(
@@ -193,6 +228,14 @@ class _InventarioScreenState extends State<InventarioScreen> {
             Text('Serial: ${item.serial}'),
             Text('ID: ${item.numeroIdentificacion}'),
             Text('Cantidad: ${item.cantidad} - Precio: \$${item.precio.toStringAsFixed(2)}'),
+            if (item.cantidad <= 5)
+              Text(
+                '⚠️ Stock bajo',
+                style: TextStyle(
+                  color: Colors.orange[800],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
           ],
         ),
         trailing: Row(
@@ -201,14 +244,17 @@ class _InventarioScreenState extends State<InventarioScreen> {
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.blue),
               onPressed: () => _editarItem(item),
+              tooltip: 'Editar item',
             ),
             IconButton(
               icon: const Icon(Icons.local_offer, color: Colors.green),
               onPressed: () => _imprimirEtiquetaExistente(item),
+              tooltip: 'Imprimir etiqueta',
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
               onPressed: () => _eliminarItem(item),
+              tooltip: 'Eliminar item',
             ),
           ],
         ),
@@ -217,31 +263,58 @@ class _InventarioScreenState extends State<InventarioScreen> {
     );
   }
 
+  // ✅ MEJORAR MANEJO DE IMÁGENES
   Widget _buildItemImage(Item item) {
-    if (item.imagenPath != null) {
-      try {
-        return Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.grey[200],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.file(
-              File(item.imagenPath!),
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return _buildPlaceholderIcon();
-              },
-            ),
-          ),
-        );
-      } catch (e) {
-        return _buildPlaceholderIcon();
-      }
+    if (item.tieneImagen) {
+      return Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey[200],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: _buildImageWidget(item),
+        ),
+      );
     } else {
+      return _buildPlaceholderIcon();
+    }
+  }
+
+  Widget _buildImageWidget(Item item) {
+    try {
+      // Intentar cargar como archivo local primero
+      if (item.imagenUrl!.startsWith('/') || item.imagenUrl!.contains('\\')) {
+        return Image.file(
+          File(item.imagenUrl!),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildPlaceholderIcon();
+          },
+        );
+      } else {
+        // Si es una URL de Firebase o web
+        return Image.network(
+          item.imagenUrl!,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildPlaceholderIcon();
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+        );
+      }
+    } catch (e) {
       return _buildPlaceholderIcon();
     }
   }
@@ -268,54 +341,87 @@ class _InventarioScreenState extends State<InventarioScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (item.imagenPath != null)
-                Container(
-                  width: double.infinity,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey[100],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      File(item.imagenPath!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Center(
-                          child: _buildPlaceholderIcon(),
-                        );
-                      },
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  width: double.infinity,
-                  height: 150,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey[200],
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.inventory_2, size: 50, color: Colors.grey),
-                        const SizedBox(height: 8),
-                        Text('Sin imagen', style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  ),
+              // Imagen del item
+              Container(
+                width: double.infinity,
+                height: 200,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey[100],
                 ),
+                child: item.tieneImagen 
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _buildImageWidget(item),
+                      )
+                    : Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.inventory_2, size: 50, color: Colors.grey),
+                            const SizedBox(height: 8),
+                            const Text('Sin imagen', style: TextStyle(color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+              ),
               
               const SizedBox(height: 16),
               
+              // Detalles del item
               _buildDetailRow('Descripción:', item.descripcion),
               _buildDetailRow('Número de Serie:', item.serial),
               _buildDetailRow('ID:', item.numeroIdentificacion),
-              _buildDetailRow('Cantidad:', item.cantidad.toString()),
+              _buildDetailRow('Cantidad:', '${item.cantidad} unidades'),
               _buildDetailRow('Precio:', '\$${item.precio.toStringAsFixed(2)}'),
+              if (item.categoriaId != null)
+                _buildDetailRow('Categoría ID:', item.categoriaId!),
+              
+              // Estado del stock
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: item.cantidad == 0 
+                      ? Colors.red[50] 
+                      : item.cantidad <= 5 
+                          ? Colors.orange[50] 
+                          : Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      item.cantidad == 0 
+                          ? Icons.error 
+                          : item.cantidad <= 5 
+                              ? Icons.warning 
+                              : Icons.check_circle,
+                      color: item.cantidad == 0 
+                          ? Colors.red 
+                          : item.cantidad <= 5 
+                              ? Colors.orange 
+                              : Colors.green,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      item.cantidad == 0 
+                          ? 'Sin stock' 
+                          : item.cantidad <= 5 
+                              ? 'Stock bajo' 
+                              : 'Stock suficiente',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: item.cantidad == 0 
+                            ? Colors.red 
+                            : item.cantidad <= 5 
+                                ? Colors.orange 
+                                : Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -331,6 +437,13 @@ class _InventarioScreenState extends State<InventarioScreen> {
             },
             child: const Text('Editar'),
           ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _imprimirEtiquetaExistente(item);
+            },
+            child: const Text('Etiqueta'),
+          ),
         ],
       ),
     );
@@ -342,9 +455,12 @@ class _InventarioScreenState extends State<InventarioScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -364,18 +480,36 @@ class _InventarioScreenState extends State<InventarioScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
-      color: Colors.orange[50],
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orange[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange[200]!),
+      ),
       child: Row(
         children: [
           Icon(Icons.warning, color: Colors.orange[800]),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              '${itemsStockBajo.length} productos con stock bajo (≤ 5 unidades)',
-              style: TextStyle(
-                color: Colors.orange[800],
-                fontWeight: FontWeight.bold,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${itemsStockBajo.length} producto(s) con stock bajo',
+                  style: TextStyle(
+                    color: Colors.orange[800],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (itemsStockBajo.any((item) => item.cantidad == 0))
+                  Text(
+                    '${itemsStockBajo.where((item) => item.cantidad == 0).length} producto(s) sin stock',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
             ),
           ),
           TextButton(
@@ -392,6 +526,8 @@ class _InventarioScreenState extends State<InventarioScreen> {
 
   void _mostrarStockBajoDetalle() {
     final itemsStockBajo = _items.where((item) => item.cantidad <= 5).toList();
+    final itemsSinStock = itemsStockBajo.where((item) => item.cantidad == 0).toList();
+    final itemsStockBajoConExistencia = itemsStockBajo.where((item) => item.cantidad > 0).toList();
     
     showDialog(
       context: context,
@@ -399,25 +535,50 @@ class _InventarioScreenState extends State<InventarioScreen> {
         title: const Text('Productos con Stock Bajo'),
         content: SizedBox(
           width: double.maxFinite,
-          child: ListView.builder(
+          child: ListView(
             shrinkWrap: true,
-            itemCount: itemsStockBajo.length,
-            itemBuilder: (context, index) {
-              final item = itemsStockBajo[index];
-              return ListTile(
-                leading: _buildItemImage(item),
-                title: Text(item.nombre),
-                subtitle: Text('Stock: ${item.cantidad} - Precio: \$${item.precio.toStringAsFixed(2)}'),
-                trailing: Text(
-                  '${item.cantidad}',
-                  style: TextStyle(
-                    color: item.cantidad == 0 ? Colors.red : Colors.orange,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+            children: [
+              if (itemsSinStock.isNotEmpty) ...[
+                const Text(
+                  '📦 Sin Stock:',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
                 ),
-              );
-            },
+                ...itemsSinStock.map((item) => ListTile(
+                  leading: _buildItemImage(item),
+                  title: Text(item.nombre),
+                  subtitle: Text('Precio: \$${item.precio.toStringAsFixed(2)}'),
+                  trailing: Text(
+                    '0',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                )),
+                const SizedBox(height: 16),
+              ],
+              
+              if (itemsStockBajoConExistencia.isNotEmpty) ...[
+                const Text(
+                  '⚠️ Stock Bajo:',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
+                ),
+                ...itemsStockBajoConExistencia.map((item) => ListTile(
+                  leading: _buildItemImage(item),
+                  title: Text(item.nombre),
+                  subtitle: Text('Precio: \$${item.precio.toStringAsFixed(2)}'),
+                  trailing: Text(
+                    '${item.cantidad}',
+                    style: TextStyle(
+                      color: Colors.orange[800],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                )),
+              ],
+            ],
           ),
         ),
         actions: [
@@ -432,31 +593,46 @@ class _InventarioScreenState extends State<InventarioScreen> {
 
   // ✅ FILTROS DE BÚSQUEDA
   Widget _buildFiltrosHeader() {
-    return Padding(
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              _filtros.tieneFiltros ? 'Filtros activos' : 'Sin filtros',
-              style: TextStyle(
-                color: _filtros.tieneFiltros ? Colors.blue : Colors.grey,
-                fontWeight: _filtros.tieneFiltros ? FontWeight.bold : FontWeight.normal,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _filtros.tieneFiltros ? 'Filtros activos' : 'Sin filtros aplicados',
+                      style: TextStyle(
+                        color: _filtros.tieneFiltros ? Colors.blue : Colors.grey,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (_filtros.tieneFiltros)
+                      Text(
+                        '${_filteredItems.length} de ${_items.length} items',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                  ],
+                ),
               ),
-            ),
+              IconButton(
+                icon: const Icon(Icons.filter_list),
+                onPressed: _mostrarDialogoFiltros,
+                tooltip: 'Filtrar items',
+              ),
+              if (_filtros.tieneFiltros)
+                IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: _limpiarFiltros,
+                  tooltip: 'Limpiar filtros',
+                ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _mostrarDialogoFiltros,
-            tooltip: 'Filtrar items',
-          ),
-          if (_filtros.tieneFiltros)
-            IconButton(
-              icon: const Icon(Icons.clear),
-              onPressed: _limpiarFiltros,
-              tooltip: 'Limpiar filtros',
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -472,7 +648,13 @@ class _InventarioScreenState extends State<InventarioScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text('Filtrar Items'),
+            title: const Row(
+              children: [
+                Icon(Icons.filter_list),
+                SizedBox(width: 8),
+                Text('Filtrar Items'),
+              ],
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -484,16 +666,22 @@ class _InventarioScreenState extends State<InventarioScreen> {
                       Expanded(
                         child: TextField(
                           controller: precioMinController,
-                          decoration: const InputDecoration(labelText: 'Mínimo'),
-                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Mínimo',
+                            hintText: '0.00',
+                          ),
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: TextField(
                           controller: precioMaxController,
-                          decoration: const InputDecoration(labelText: 'Máximo'),
-                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Máximo',
+                            hintText: '1000.00',
+                          ),
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
                         ),
                       ),
                     ],
@@ -508,7 +696,10 @@ class _InventarioScreenState extends State<InventarioScreen> {
                       Expanded(
                         child: TextField(
                           controller: stockMinController,
-                          decoration: const InputDecoration(labelText: 'Mínimo'),
+                          decoration: const InputDecoration(
+                            labelText: 'Mínimo',
+                            hintText: '0',
+                          ),
                           keyboardType: TextInputType.number,
                         ),
                       ),
@@ -516,7 +707,10 @@ class _InventarioScreenState extends State<InventarioScreen> {
                       Expanded(
                         child: TextField(
                           controller: stockMaxController,
-                          decoration: const InputDecoration(labelText: 'Máximo'),
+                          decoration: const InputDecoration(
+                            labelText: 'Máximo',
+                            hintText: '100',
+                          ),
                           keyboardType: TextInputType.number,
                         ),
                       ),
@@ -526,7 +720,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
                   const SizedBox(height: 16),
                   
                   // Filtro stock bajo
-                  CheckboxListTile(
+                  SwitchListTile(
                     title: const Text('Solo stock bajo (≤ 5 unidades)'),
                     value: _filtros.soloStockBajo,
                     onChanged: (value) {
@@ -543,7 +737,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('Cancelar'),
               ),
-              TextButton(
+              ElevatedButton(
                 onPressed: () {
                   _aplicarFiltros(
                     precioMin: double.tryParse(precioMinController.text),
@@ -553,7 +747,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
                   );
                   Navigator.of(context).pop();
                 },
-                child: const Text('Aplicar'),
+                child: const Text('Aplicar Filtros'),
               ),
             ],
           );
@@ -611,7 +805,8 @@ class _InventarioScreenState extends State<InventarioScreen> {
       resultados = resultados.where((item) =>
           item.nombre.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           item.serial.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          item.numeroIdentificacion.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+          item.numeroIdentificacion.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          item.descripcion.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
     
     setState(() {
@@ -619,29 +814,12 @@ class _InventarioScreenState extends State<InventarioScreen> {
     });
   }
 
-  void _onSearch(String query) async {
+  void _onSearch(String query) {
     setState(() {
       _searchQuery = query;
-      _cargando = true;
+      _filtros = _filtros.copyWith(query: query);
+      _aplicarFiltrosYBusqueda();
     });
-
-    if (query.isEmpty) {
-      setState(() {
-        _filteredItems = _items;
-        _cargando = false;
-      });
-    } else {
-      final dbHelper = DatabaseHelper();
-      final results = await dbHelper.searchItems(query);
-      setState(() {
-        _filteredItems = results;
-        _cargando = false;
-      });
-    }
-    
-    // Actualizar filtros con la nueva búsqueda
-    _filtros = _filtros.copyWith(query: query);
-    _aplicarFiltrosYBusqueda();
   }
 
   void _onSuggestionSelected(String suggestion) {
@@ -657,6 +835,29 @@ class _InventarioScreenState extends State<InventarioScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Inventario'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _cargarItems,
+            tooltip: 'Actualizar inventario',
+          ),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              final resultado = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AgregarItemScreen()),
+              );
+              if (resultado == true) {
+                await _cargarItems();
+              }
+            },
+            tooltip: 'Agregar nuevo item',
+          ),
+        ],
+      ),
       body: Column(
         children: [
           // Barra de búsqueda
@@ -665,56 +866,69 @@ class _InventarioScreenState extends State<InventarioScreen> {
             onSuggestionSelected: _onSuggestionSelected,
           ),
           
-          // ✅ FILTROS
+          // Filtros
           _buildFiltrosHeader(),
           
-          // ✅ ALERTAS DE STOCK BAJO
+          // Alertas de stock bajo
           _buildStockBajoHeader(),
           
-          // Título
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            child: const Text(
-              'Inventario',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-          ),
-          
           // Contenido principal
-          if (_cargando)
-            const Center(child: CircularProgressIndicator())
-          else if (_filteredItems.isEmpty && _searchQuery.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'No se encontraron resultados para "$_searchQuery"',
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-            )
-          else if (_filteredItems.isEmpty)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.inventory_2, size: 64, color: Colors.grey),
-                    const SizedBox(height: 16),
-                    const Text('No hay items en el inventario', style: TextStyle(fontSize: 16)),
-                  ],
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: ListView.builder(
-                itemCount: _filteredItems.length,
-                itemBuilder: (context, index) {
-                  final item = _filteredItems[index];
-                  return _buildItemCard(item);
-                },
-              ),
-            ),
+          Expanded(
+            child: _cargando
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredItems.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        itemCount: _filteredItems.length,
+                        itemBuilder: (context, index) {
+                          final item = _filteredItems[index];
+                          return _buildItemCard(item);
+                        },
+                      ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.inventory_2, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              _searchQuery.isNotEmpty || _filtros.tieneFiltros
+                  ? 'No se encontraron resultados'
+                  : 'No hay items en el inventario',
+              style: const TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            if (_searchQuery.isNotEmpty || _filtros.tieneFiltros) ...[
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _limpiarFiltros,
+                child: const Text('Limpiar filtros'),
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  final resultado = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AgregarItemScreen()),
+                  );
+                  if (resultado == true) {
+                    await _cargarItems();
+                  }
+                },
+                child: const Text('Agregar primer item'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

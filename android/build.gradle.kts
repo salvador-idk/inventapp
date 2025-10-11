@@ -5,6 +5,8 @@ allprojects {
     }
 }
 
+id("com.google.gms.google-services") version "4.4.3" apply false
+
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")

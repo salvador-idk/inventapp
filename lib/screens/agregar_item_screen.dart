@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:provider/provider.dart';
 import '/services/database_helper.dart';
+import '/services/inventory_service.dart';
 import '/models/item_model.dart';
 import '/models/categoria_model.dart';
 import '/utils/etiqueta_service.dart';
@@ -19,6 +21,12 @@ class AgregarItemScreen extends StatefulWidget {
 }
 
 class _AgregarItemScreenState extends State<AgregarItemScreen> {
+  // ✅ MÉTODO PARA CONVERSIÓN SEGURA DE STRING A INT
+  int _safeStringToInt(String? value) {
+    if (value == null || value.isEmpty) return 0;
+    return int.tryParse(value) ?? 0;
+  }
+
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _descripcionController = TextEditingController();
@@ -35,14 +43,18 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
   bool _modoEdicion = false; 
 
   List<Categoria> _categorias = [];
-  int? _categoriaSeleccionada;
+  String? _categoriaSeleccionada;
+
+  // ✅ GET INVENTORY SERVICE INSTANCE
+  InventoryService get _inventoryService {
+    return Provider.of<InventoryService>(context, listen: false);
+  }
 
   @override
   void initState(){
     super.initState();
     _cargarCategorias();
 
-    // Si estamos editando, precargar los datos
     _modoEdicion = widget.itemParaEditar != null;
     if (_modoEdicion){
       _cargarDatosParaEdicion();
@@ -50,11 +62,15 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
   }
 
   Future<void> _cargarCategorias() async {
-    final dbHelper = DatabaseHelper();
-    final categorias = await dbHelper.getCategorias();
-    setState(() {
-      _categorias = categorias;
-    });
+    try {
+      final dbHelper = DatabaseHelper();
+      final categorias = await dbHelper.getCategorias();
+      setState(() {
+        _categorias = categorias;
+      });
+    } catch (e) {
+      print('Error cargando categorías: $e');
+    }
   }
 
   void _cargarDatosParaEdicion(){
@@ -65,18 +81,48 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     _idController.text = item.numeroIdentificacion;
     _cantidadController.text = item.cantidad.toString();
     _precioController.text = item.precio.toString();
-    _categoriaSeleccionada = item.categoriaId; // ✅ CARGAR CATEGORÍA
+    
+    // ✅ CONVERSIÓN SEGURA DE CATEGORÍA - MANEJAR STRING IDs
+    if (item.categoriaId != null && item.categoriaId!.isNotEmpty) {
+      // Buscar la categoría que coincida (el ID en la base de datos es int, pero en Item es String)
+      final categoriaEncontrada = _categorias.firstWhere(
+        (categoria) => categoria.id?.toString() == item.categoriaId,
+        orElse: () => Categoria(
+          id: -1, 
+          nombre: 'No encontrada', 
+          color: 'FF0000' // Rojo para indicar error
+        ),
+      );
+      
+      if (categoriaEncontrada.id != -1) {
+        _categoriaSeleccionada = categoriaEncontrada.id?.toString();
+      } else {
+        // Si no se encuentra, usar el valor original
+        _categoriaSeleccionada = item.categoriaId;
+        print('⚠️ Categoría no encontrada para ID: ${item.categoriaId}');
+      }
+    } else {
+      _categoriaSeleccionada = null;
+    }
 
-    if(item.imagenPath != null){
-      _imagen = File(item.imagenPath!);
+    if(item.imagenUrl != null && item.imagenUrl!.isNotEmpty){
+      try {
+        _imagen = File(item.imagenUrl!);
+      } catch (e) {
+        print('No se pudo cargar imagen local: $e');
+      }
     }
     
-    // En modo edición, el item ya está guardado
     _itemGuardado = item;
   }
 
   Future<void> _seleccionarImagen() async {
-    final XFile? imagen = await _picker.pickImage(source: ImageSource.gallery);
+    final XFile? imagen = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
     if (imagen != null) {
       setState(() {
         _imagen = File(imagen.path);
@@ -85,179 +131,178 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     }
   }
 
- Future<void> _guardarItem() async {
-  if (_formKey.currentState!.validate()) {
-    // Si no hay imagen, preguntar si está seguro
-    if (_imagen == null) {
-      final continuarSinImagen = await _confirmarSinImagen();
-      if (!continuarSinImagen) {
-        setState(() {
-          _imagenRequerida = true;
-        });
-        return;
-      }
+  // ✅ VALIDATE SERIAL UNIQUENESS - FIXED TO USE INSTANCE METHOD
+  Future<String?> _validarSerialUnico(String? value) async {
+    if (value == null || value.isEmpty) {
+      return 'Por favor ingrese el número de serie';
     }
 
-    setState(() {
-      _guardando = true;
-    });
-
-    // ✅ CREAR ITEM CON CATEGORÍA
-    final item = Item(
-      id: _modoEdicion ? widget.itemParaEditar!.id : null,
-      nombre: _nombreController.text,
-      descripcion: _descripcionController.text,
-      serial: _serialController.text,
-      numeroIdentificacion: _idController.text,
-      imagenPath: _imagen?.path,
-      cantidad: int.parse(_cantidadController.text),
-      precio: double.parse(_precioController.text),
-      categoriaId: _categoriaSeleccionada, // ✅ INCLUIR CATEGORÍA
-    );
+    if (value.length < 2) {
+      return 'El número de serie debe tener al menos 2 caracteres';
+    }
 
     try {
-      final dbHelper = DatabaseHelper();
-
-      if(_modoEdicion){
-        // MODO EDICIÓN: Verificar si los campos únicos ya existen (excepto para este item)
-        if (_serialController.text != widget.itemParaEditar!.serial || 
-            _idController.text != widget.itemParaEditar!.numeroIdentificacion) {
-          
-          final itemsExistentes = await dbHelper.getItems();
-          final serialExistente = itemsExistentes.any((i) => 
-              i.serial == _serialController.text && i.id != widget.itemParaEditar!.id);
-          final idExistente = itemsExistentes.any((i) => 
-              i.numeroIdentificacion == _idController.text && i.id != widget.itemParaEditar!.id);
-          
-          if (serialExistente || idExistente) {
-            setState(() { _guardando = false; });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(serialExistente 
-                    ? 'Ya existe un item con el mismo número de serie' 
-                    : 'Ya existe un item con el mismo número de identificación'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            return;
-          }
-        }
-
-        // ✅ LOG DE AUDITORÍA PARA ACTUALIZACIÓN (ANTES de actualizar)
-        await AuditService.logItemUpdate(
-          context,
-          itemId: widget.itemParaEditar!.id!,
-          oldData: jsonEncode({
-            'nombre': widget.itemParaEditar!.nombre,
-            'descripcion': widget.itemParaEditar!.descripcion,
-            'serial': widget.itemParaEditar!.serial,
-            'numeroIdentificacion': widget.itemParaEditar!.numeroIdentificacion,
-            'precio': widget.itemParaEditar!.precio,
-            'cantidad': widget.itemParaEditar!.cantidad,
-            'categoriaId': widget.itemParaEditar!.categoriaId,
-          }),
-          newData: jsonEncode({
-            'nombre': item.nombre,
-            'descripcion': item.descripcion,
-            'serial': item.serial,
-            'numeroIdentificacion': item.numeroIdentificacion,
-            'precio': item.precio,
-            'cantidad': item.cantidad,
-            'categoriaId': item.categoriaId,
-          }),
-          itemName: item.nombre,
-        );
-
-        // Actualizar item existente
-        await dbHelper.updateItem(item);
-        final itemActualizado = item.copyWith(id: widget.itemParaEditar!.id);
-
-        setState(() {
-          _itemGuardado = itemActualizado;
-          _guardando = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Item actualizado exitosamente')),
-        );
-
-        // Regresar a la pantalla anterior con éxito
-        Navigator.of(context).pop(true);
-
-      } else {
-        // MODO NUEVO: Insertar nuevo item
-        final id = await dbHelper.insertItem(item);
-
-        // ✅ LOG DE AUDITORÍA PARA CREACIÓN (DESPUÉS de insertar)
-        await AuditService.logItemCreate(
-          context,
-          itemId: id,
-          itemName: item.nombre,
-        );
-
-        final itemGuardado = Item(
-          id: id,
-          nombre: item.nombre,
-          descripcion: item.descripcion,
-          serial: item.serial,
-          numeroIdentificacion: item.numeroIdentificacion,
-          imagenPath: item.imagenPath,
-          cantidad: item.cantidad,
-          precio: item.precio,
-          categoriaId: item.categoriaId, // ✅ INCLUIR CATEGORÍA
-        );
-
-        setState(() {
-          _itemGuardado = itemGuardado;
-          _guardando = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Item guardado exitosamente')),
-        );
-
-        await _mostrarOpcionesEtiqueta(itemGuardado);
+      // Podrías mostrar un indicador de carga aquí si la validación es lenta
+      final existe = await _inventoryService.itemExists(
+        value, 
+        excludeItemId: _modoEdicion ? widget.itemParaEditar!.id : null
+      );
+      
+      if (existe) {
+        return 'Ya existe un item con este número de serie';
       }
-      
     } catch (e) {
+      print('Error validando serial único: $e');
+      // No retornar error si falla la validación de unicidad
+      // para no bloquear al usuario por errores de red
+    }
+    
+    return null;
+  }
+
+  Future<void> _guardarItem() async {
+    if (_formKey.currentState!.validate()) {
+      // Validate serial uniqueness
+      final serialError = await _validarSerialUnico(_serialController.text);
+      if (serialError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(serialError),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Si no hay imagen, preguntar si está seguro
+      if (_imagen == null) {
+        final continuarSinImagen = await _confirmarSinImagen();
+        if (!continuarSinImagen) {
+          setState(() {
+            _imagenRequerida = true;
+          });
+          return;
+        }
+      }
+
       setState(() {
-        _guardando = false;
+        _guardando = true;
       });
-      
-      // MANEJO ESPECÍFICO DE ERRORES
-      if (e.toString().contains('Ya existe un item')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Ya existe un item con el mismo número de serie o ID'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Entendido',
-              textColor: Colors.white,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
-          ),
-        );
-      } else if (e.toString().contains('UNIQUE constraint failed')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Error: El número de serie o ID ya existe en el sistema'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+
+      // ✅ CREAR ITEM CON CATEGORIA ID CORRECTO (STRING)
+      final item = Item(
+        id: _modoEdicion ? widget.itemParaEditar!.id : null,
+        nombre: _nombreController.text,
+        descripcion: _descripcionController.text,
+        serial: _serialController.text,
+        numeroIdentificacion: _idController.text,
+        imagenUrl: _imagen?.path,
+        cantidad: int.tryParse(_cantidadController.text) ?? 0,
+        precio: double.tryParse(_precioController.text) ?? 0.0,
+        categoriaId: _categoriaSeleccionada,
+      );
+
+      try {
+        if (_modoEdicion) {
+          // ✅ LOG DE AUDITORÍA PARA ACTUALIZACIÓN
+          await AuditService.logItemUpdate(
+            context,
+            itemId: _safeStringToInt(widget.itemParaEditar!.id),
+            oldData: jsonEncode({
+              'nombre': widget.itemParaEditar!.nombre,
+              'descripcion': widget.itemParaEditar!.descripcion,
+              'serial': widget.itemParaEditar!.serial,
+              'numeroIdentificacion': widget.itemParaEditar!.numeroIdentificacion,
+              'precio': widget.itemParaEditar!.precio,
+              'cantidad': widget.itemParaEditar!.cantidad,
+              'categoriaId': widget.itemParaEditar!.categoriaId,
+            }),
+            newData: jsonEncode({
+              'nombre': item.nombre,
+              'descripcion': item.descripcion,
+              'serial': item.serial,
+              'numeroIdentificacion': item.numeroIdentificacion,
+              'precio': item.precio,
+              'cantidad': item.cantidad,
+              'categoriaId': item.categoriaId,
+            }),
+            itemName: item.nombre,
+          );
+
+          // ✅ FIXED: Use instance method instead of static
+          await _inventoryService.updateItem(item);
+
+          setState(() {
+            _itemGuardado = item.copyWith(id: widget.itemParaEditar!.id);
+            _guardando = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item actualizado exitosamente')),
+          );
+
+          Navigator.of(context).pop(true);
+        } else {
+          // ✅ MODO NUEVO: Insertar nuevo item usando InventoryService instance
+          final id = await _inventoryService.addItem(item);
+
+          // ✅ LOG DE AUDITORÍA PARA CREACIÓN - CONVERSIÓN SEGURA A INT
+          await AuditService.logItemCreate(
+            context,
+            itemId: _safeStringToInt(id), // ✅ CONVERSIÓN SEGURA
+            itemName: item.nombre,
+          );
+
+          final itemGuardado = item.copyWith(id: id);
+
+          setState(() {
+            _itemGuardado = itemGuardado;
+            _guardando = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item guardado exitosamente')),
+          );
+
+          await _mostrarOpcionesEtiqueta(itemGuardado);
+        }
+      } catch (e) {
+        setState(() {
+          _guardando = false;
+        });
+        _manejarErrorGuardado(e, context);
       }
     }
   }
-}
+
+  void _manejarErrorGuardado(dynamic e, BuildContext context) {
+    String mensaje = 'Error al guardar: ${e.toString()}';
+    
+    if (e.toString().contains('Ya existe un item')) {
+      mensaje = 'Ya existe un item con el mismo número de serie o ID';
+    } else if (e.toString().contains('UNIQUE constraint failed')) {
+      mensaje = 'Error: El número de serie o ID ya existe en el sistema';
+    } else if (e.toString().contains('permission-denied')) {
+      mensaje = 'Error de permisos: No tienes acceso para realizar esta acción';
+    } else if (e.toString().contains('network-request-failed')) {
+      mensaje = 'Error de red: Verifica tu conexión a internet';
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Entendido',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
 
   Future<bool> _confirmarSinImagen() async {
     final resultado = await showDialog<bool>(
@@ -316,7 +361,112 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     }
   }
 
+  // ✅ DROPDOWN DE CATEGORÍAS
+  Widget _buildCategoriaDropdown() {
+  // Filtrar categorías para eliminar duplicados
+    final categoriasUnicas = _eliminarCategoriasDuplicadas(_categorias);
+    
+    return DropdownButtonFormField<String>(
+      value: _categoriaSeleccionada,
+      decoration: const InputDecoration(
+        labelText: 'Categoría',
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        const DropdownMenuItem(
+          value: null,
+          child: Text('Sin categoría'),
+        ),
+        ...categoriasUnicas.map((categoria) {
+          // ✅ USAR EL GETTER colorMaterial DE TU MODELO
+          final valorUnico = categoria.id?.toString() ?? 'null_${categoria.nombre}';
+          
+          return DropdownMenuItem(
+            value: valorUnico,
+            child: Row(
+              children: [
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: categoria.colorMaterial, // ✅ Usar el getter colorMaterial
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(categoria.nombre),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+      onChanged: (value) {
+        setState(() {
+          _categoriaSeleccionada = value;
+        });
+      },
+    );
+  }
+
+  // ✅ MÉTODO PARA ELIMINAR CATEGORÍAS DUPLICADAS
+  List<Categoria> _eliminarCategoriasDuplicadas(List<Categoria> categorias) {
+    final mapaUnico = <String, Categoria>{};
+    
+    for (final categoria in categorias) {
+      final clave = categoria.id?.toString() ?? categoria.nombre;
+      if (!mapaUnico.containsKey(clave)) {
+        mapaUnico[clave] = categoria;
+      } else {
+        print('⚠️ Categoría duplicada eliminada: ${categoria.nombre} (ID: ${categoria.id})');
+      }
+    }
+    
+    return mapaUnico.values.toList();
+  }
+
+  // ✅ VALIDACIÓN MEJORADA PARA SERIAL
+  String? _validarSerial(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Por favor ingrese el número de serie';
+    }
+    if (value.length < 2) {
+      return 'El número de serie debe tener al menos 2 caracteres';
+    }
+    return null;
+  }
+
+  // ✅ MEJORAR LIMPIAR FORMULARIO CON CONFIRMACIÓN
   void _limpiarFormulario() {
+    if (_nombreController.text.isNotEmpty || 
+        _descripcionController.text.isNotEmpty ||
+        _imagen != null) {
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Limpiar formulario'),
+          content: const Text('¿Estás seguro de que quieres limpiar el formulario? Se perderán todos los datos no guardados.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _realizarLimpiezaFormulario();
+              },
+              child: const Text('Limpiar', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _realizarLimpiezaFormulario();
+    }
+  }
+
+  void _realizarLimpiezaFormulario() {
     _formKey.currentState!.reset();
     _nombreController.clear();
     _descripcionController.clear();
@@ -328,7 +478,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
       _imagen = null;
       _itemGuardado = null;
       _imagenRequerida = false;
-      _categoriaSeleccionada = null; // ✅ LIMPIAR CATEGORÍA
+      _categoriaSeleccionada = null;
     });
   }
 
@@ -337,6 +487,14 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_modoEdicion ? 'Editar Item' : 'Agregar Item'),
+        actions: [
+          if (_modoEdicion)
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _eliminarItem,
+              tooltip: 'Eliminar Item',
+            ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -351,12 +509,15 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                     TextFormField(
                       controller: _nombreController,
                       decoration: const InputDecoration(
-                        labelText: 'Nombre del Item',
+                        labelText: 'Nombre del Item *',
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Por favor ingrese el nombre';
+                        }
+                        if (value.length < 2) {
+                          return 'El nombre debe tener al menos 2 caracteres';
                         }
                         return null;
                       },
@@ -365,7 +526,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                     TextFormField(
                       controller: _descripcionController,
                       decoration: const InputDecoration(
-                        labelText: 'Descripción',
+                        labelText: 'Descripción *',
                         border: OutlineInputBorder(),
                       ),
                       maxLines: 3,
@@ -373,76 +534,38 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                         if (value == null || value.isEmpty) {
                           return 'Por favor ingrese la descripción';
                         }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // ✅ DROPDOWN DE CATEGORÍAS (DENTRO DEL BUILD)
-                    DropdownButtonFormField<int>(
-                      value: _categoriaSeleccionada,
-                      decoration: const InputDecoration(
-                        labelText: 'Categoría',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('Sin categoría'),
-                        ),
-                        ..._categorias.map((categoria) => DropdownMenuItem(
-                          value: categoria.id,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: categoria.colorMaterial,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(categoria.nombre),
-                            ],
-                          ),
-                        )).toList(),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _categoriaSeleccionada = value;
-                        });
-                      },
-                      validator: (value) {
-                        // Opcional: agregar validación si quieres que sea requerido
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: _serialController,
-                      decoration: const InputDecoration(
-                        labelText: 'Número de Serie',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor ingrese el número de serie';
+                        if (value.length < 5) {
+                          return 'La descripción debe tener al menos 5 caracteres';
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 16),
+                    
+                    _buildCategoriaDropdown(),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _serialController,
+                      decoration: const InputDecoration(
+                        labelText: 'Número de Serie *',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: _validarSerial,
+                    ),
+                    const SizedBox(height: 16),
                     TextFormField(
                       controller: _idController,
                       decoration: const InputDecoration(
-                        labelText: 'Número de Identificación',
+                        labelText: 'Número de Identificación *',
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Por favor ingrese el número de identificación';
+                        }
+                        if (value.length < 2) {
+                          return 'El ID debe tener al menos 2 caracteres';
                         }
                         return null;
                       },
@@ -454,7 +577,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                           child: TextFormField(
                             controller: _cantidadController,
                             decoration: const InputDecoration(
-                              labelText: 'Cantidad',
+                              labelText: 'Cantidad *',
                               border: OutlineInputBorder(),
                             ),
                             keyboardType: TextInputType.number,
@@ -462,8 +585,12 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                               if (value == null || value.isEmpty) {
                                 return 'Ingrese cantidad';
                               }
-                              if (int.tryParse(value) == null) {
+                              final cantidad = int.tryParse(value);
+                              if (cantidad == null) {
                                 return 'Ingrese un número válido';
+                              }
+                              if (cantidad < 0) {
+                                return 'La cantidad no puede ser negativa';
                               }
                               return null;
                             },
@@ -474,7 +601,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                           child: TextFormField(
                             controller: _precioController,
                             decoration: const InputDecoration(
-                              labelText: 'Precio',
+                              labelText: 'Precio *',
                               border: OutlineInputBorder(),
                             ),
                             keyboardType: TextInputType.numberWithOptions(decimal: true),
@@ -482,8 +609,12 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                               if (value == null || value.isEmpty) {
                                 return 'Ingrese precio';
                               }
-                              if (double.tryParse(value) == null) {
+                              final precio = double.tryParse(value);
+                              if (precio == null) {
                                 return 'Ingrese un número válido';
+                              }
+                              if (precio < 0) {
+                                return 'El precio no puede ser negativo';
                               }
                               return null;
                             },
@@ -496,6 +627,9 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                       onPressed: _seleccionarImagen,
                       icon: const Icon(Icons.image),
                       label: const Text('Seleccionar Imagen'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
                     ),
                     if (_imagenRequerida)
                       const Text(
@@ -504,11 +638,31 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                       ),
                     const SizedBox(height: 16),
                     if (_imagen != null)
-                      Image.file(
-                        _imagen!,
-                        height: 200,
-                        width: 200,
-                        fit: BoxFit.cover,
+                      Stack(
+                        children: [
+                          Image.file(
+                            _imagen!,
+                            height: 200,
+                            width: 200,
+                            fit: BoxFit.cover,
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: CircleAvatar(
+                              backgroundColor: Colors.red,
+                              radius: 16,
+                              child: IconButton(
+                                icon: const Icon(Icons.close, size: 16, color: Colors.white),
+                                onPressed: () {
+                                  setState(() {
+                                    _imagen = null;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       )
                     else
                       Container(
@@ -519,15 +673,35 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Center(
-                          child: Icon(Icons.image, size: 50, color: Colors.grey),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.image, size: 50, color: Colors.grey),
+                              SizedBox(height: 8),
+                              Text('Sin imagen', style: TextStyle(color: Colors.grey)),
+                            ],
+                          ),
                         ),
                       ),
                     const SizedBox(height: 24),
                     _guardando
-                        ? const CircularProgressIndicator()
+                        ? const Column(
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text('Guardando...'),
+                            ],
+                          )
                         : ElevatedButton(
                             onPressed: _guardarItem,
-                            child: Text(_modoEdicion ? 'Actualizar Item' : 'Guardar Item'),
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 50),
+                              backgroundColor: _modoEdicion ? Colors.orange : Colors.blue,
+                            ),
+                            child: Text(
+                              _modoEdicion ? 'Actualizar Item' : 'Guardar Item',
+                              style: const TextStyle(fontSize: 16),
+                            ),
                           ),
                   ],
                 ),
@@ -572,5 +746,86 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
         ),
       ),
     );
+  }
+
+  // ✅ MÉTODO PARA MANEJAR ERRORES DE ELIMINACIÓN
+  void _manejarErrorEliminacion(dynamic e, BuildContext context) {
+    String mensaje = 'Error al eliminar: ${e.toString()}';
+    
+    if (e.toString().contains('permission-denied')) {
+      mensaje = 'Error de permisos: No tienes acceso para eliminar items';
+    } else if (e.toString().contains('network-request-failed')) {
+      mensaje = 'Error de red: Verifica tu conexión a internet';
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Entendido',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _eliminarItem() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar Item'),
+        content: const Text('¿Estás seguro de que quieres eliminar este item? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        setState(() {
+          _guardando = true;
+        });
+
+        // ✅ Asegurar que el ID sea String
+        final itemId = widget.itemParaEditar!.id;
+        if (itemId == null) {
+          throw Exception('El item no tiene ID');
+        }
+
+        // ✅ FIXED: Use instance method instead of static
+        await _inventoryService.deleteItem(itemId);
+
+        // ✅ LOG DE AUDITORÍA PARA ELIMINACIÓN - CONVERSIÓN SEGURA A INT
+        await AuditService.logItemDelete(
+          context,
+          itemId: _safeStringToInt(itemId), // ✅ CONVERSIÓN SEGURA
+          itemName: widget.itemParaEditar!.nombre,
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Item eliminado exitosamente')),
+        );
+
+        Navigator.of(context).pop(true);
+      } catch (e) {
+        setState(() {
+          _guardando = false;
+        });
+        _manejarErrorEliminacion(e, context);
+      }
+    }
   }
 }

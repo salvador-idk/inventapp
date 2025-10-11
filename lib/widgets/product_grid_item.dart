@@ -23,9 +23,9 @@ class ProductGridItem extends StatelessWidget {
           children: [
             // Imagen del producto
             Expanded(
-              child: item.imagenPath != null
+              child: item.imagenUrl != null
                   ? Image.network(
-                      item.imagenPath!,
+                      item.imagenUrl!,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) => 
                           _buildPlaceholderImage(),
@@ -99,8 +99,8 @@ class ProductGridItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (item.imagenPath != null)
-                Image.network(item.imagenPath!, height: 200, fit: BoxFit.cover),
+              if (item.imagenUrl != null)
+                Image.network(item.imagenUrl!, height: 200, fit: BoxFit.cover),
               SizedBox(height: 16),
               Text('Descripción: ${item.descripcion}'),
               SizedBox(height: 8),

@@ -15,7 +15,6 @@ class AuditService {
     required String description,
   }) async {
     try {
-
       if(!context.mounted) return;
 
       final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -41,10 +40,13 @@ class AuditService {
     }
   }
 
-  // Métodos específicos para diferentes acciones
+  // ✅ CORREGIDO: Remover el parámetro 'id' duplicado
   static Future<void> logItemUpdate(BuildContext context, 
-      {required int itemId, required String oldData, required String newData, required String itemName}) async {
-        if(!context.mounted) return;
+      {required int itemId, 
+       required String oldData, 
+       required String newData, 
+       required String itemName}) async { // ❌ REMOVER 'required String id'
+    if(!context.mounted) return;
     await logAction(
       context: context,
       action: 'UPDATE',
@@ -58,7 +60,7 @@ class AuditService {
 
   static Future<void> logItemCreate(BuildContext context, 
       {required int itemId, required String itemName}) async {
-        if(!context.mounted) return;
+    if(!context.mounted) return;
     await logAction(
       context: context,
       action: 'CREATE',
@@ -70,7 +72,7 @@ class AuditService {
 
   static Future<void> logItemDelete(BuildContext context, 
       {required int itemId, required String itemName}) async {
-        if(!context.mounted) return;
+    if(!context.mounted) return;
     await logAction(
       context: context,
       action: 'DELETE',
@@ -106,13 +108,26 @@ class AuditService {
 
   static Future<void> logSale(BuildContext context, 
       {required int ticketId, required double total}) async {
-        if(!context.mounted) return;
+    if(!context.mounted) return;
     await logAction(
       context: context,
       action: 'CREATE',
       tableName: 'tickets',
       recordId: ticketId,
       description: 'Venta realizada - Total: \$${total.toStringAsFixed(2)}',
+    );
+  }
+
+  // ✅ MÉTODO ADICIONAL PARA LOG DE SINCRONIZACIÓN (si lo necesitas)
+  static Future<void> logSync(BuildContext context, 
+      {required String operation, required int itemsCount}) async {
+    if(!context.mounted) return;
+    await logAction(
+      context: context,
+      action: 'SYNC',
+      tableName: 'system',
+      recordId: 0,
+      description: 'Sincronización $operation - $itemsCount items procesados',
     );
   }
 }

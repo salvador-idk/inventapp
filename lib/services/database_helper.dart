@@ -1,7 +1,5 @@
-import 'dart:io' as sql;
-
+import 'dart:io' as io;
 import 'package:inventario_app/models/categoria_model.dart';
-
 import '../services/carrito_service.dart';
 import 'package:sqflite/sqflite.dart' as sql;
 import 'package:path/path.dart' as path;
@@ -17,7 +15,7 @@ class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   factory DatabaseHelper() => _instance;
   DatabaseHelper._internal() {
-    _initializeDatabase(); // ✅ NOMBRE CORREGIDO
+    _initializeDatabase();
   }
 
   static sql.Database? _database;
@@ -27,9 +25,8 @@ class DatabaseHelper {
     return const bool.fromEnvironment('dart.library.html');
   }
 
-  // ✅ INICIALIZACIÓN COMPATIBLE CON WEB - NOMBRE CORREGIDO
+  // ✅ INICIALIZACIÓN COMPATIBLE CON WEB
   static void _initializeDatabase() {
-    // Solo inicializar sqflite_ffi si no estamos en web
     if (!_isWeb) {
       _initSqfliteForDesktop();
     }
@@ -54,11 +51,11 @@ class DatabaseHelper {
     }
 
     if (_database != null) return _database!;
-    _database = await _initDatabaseInstance(); // ✅ NOMBRE CORREGIDO
+    _database = await _initDatabaseInstance();
     return _database!;
   }
 
-  // ✅ NOMBRE CORREGIDO PARA EL MÉTODO DE INSTANCIA
+  // ✅ INICIALIZAR INSTANCIA DE BASE DE DATOS
   Future<sql.Database> _initDatabaseInstance() async {
     if (_isWeb) {
       throw UnsupportedError('No se puede inicializar SQLite en web.');
@@ -66,10 +63,9 @@ class DatabaseHelper {
 
     String dbPath;
     
-    // Detección simplificada de plataforma
-    final bool isWindows = !_isWeb;
+    final bool isDesktop = !_isWeb && (io.Platform.isWindows || io.Platform.isLinux || io.Platform.isMacOS);
     
-    if (isWindows) {
+    if (isDesktop) {
       final documentsDir = await _getWindowsDocumentsDirectory();
       dbPath = path.join(documentsDir.path, 'inventario.db');
       
@@ -78,7 +74,6 @@ class DatabaseHelper {
         await documentsDir.create(recursive: true);
       }
     } else {
-      // Para Android/iOS
       final documentsDirectory = await getApplicationDocumentsDirectory();
       dbPath = path.join(documentsDirectory.path, 'inventario.db');
     }
@@ -93,7 +88,7 @@ class DatabaseHelper {
     );
   }
 
-  Future<sql.Directory> _getWindowsDocumentsDirectory() async {
+  Future<io.Directory> _getWindowsDocumentsDirectory() async {
     if (_isWeb) {
       throw UnsupportedError('No disponible en web');
     }
@@ -101,18 +96,19 @@ class DatabaseHelper {
     try {
       return await getApplicationDocumentsDirectory();
     } catch (e) {
-      // Fallback simple
-      return sql.Directory.current;
+      return io.Directory.current;
     }
   }
 
+  // ✅ CREAR BASE DE DATOS - VERSIÓN ORIGINAL
   Future<void> _onCreate(sql.Database db, int version) async {
     if (_isWeb) return;
     
     print('🛠️ Creando tablas en versión $version...');
     
+    // ✅ TABLA ITEMS (ORIGINAL)
     await db.execute('''
-      CREATE TABLE items(
+      CREATE TABLE items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
         descripcion TEXT NOT NULL,
@@ -120,40 +116,26 @@ class DatabaseHelper {
         numeroIdentificacion TEXT NOT NULL UNIQUE,
         imagenPath TEXT,
         cantidad INTEGER DEFAULT 0,
-        precio REAL DEFAULT 0.0
+        precio REAL DEFAULT 0.0,
+        categoriaId TEXT,
+        createdAt TEXT,
+        updatedAt TEXT
       )
     ''');
 
+    // ✅ TABLA CATEGORIAS (ORIGINAL)
     await db.execute('''
-  CREATE TABLE IF NOT EXISTS categorias (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT NOT NULL UNIQUE,
-    descripcion TEXT,
-    color TEXT NOT NULL
-  )
-''');
+      CREATE TABLE categorias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL UNIQUE,
+        colorMaterial INTEGER NOT NULL
+      )
+    ''');
 
-// Método para categorías por defecto
-Future<void> _insertarCategoriasPorDefecto(Database db) async {
-  final categorias = [
-    {'nombre': 'Electrónicos', 'color': 'FF5722'},
-    {'nombre': 'Ropa', 'color': '2196F3'},
-    {'nombre': 'Hogar', 'color': '4CAF50'},
-    {'nombre': 'Deportes', 'color': '9C27B0'},
-    {'nombre': 'Libros', 'color': '607D8B'},
-    {'nombre': 'Otros', 'color': '795548'},
-  ];
+    // ✅ INSERTAR CATEGORÍAS POR DEFECTO (ORIGINAL)
+    await _insertarCategoriasPorDefecto(db);
 
-  for (final categoria in categorias) {
-    await db.insert('categorias', categoria, 
-      conflictAlgorithm: ConflictAlgorithm.ignore);
-  }
-}
-
-// Insertar categorías por defecto
-await _insertarCategoriasPorDefecto(db);
-
-
+    // ✅ TABLAS EXISTENTES QUE FUNCIONABAN
     await db.execute('''
       CREATE TABLE tickets(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,9 +172,7 @@ await _insertarCategoriasPorDefecto(db);
       )
     ''');
 
-    
-    
-    // Insertar usuarios por defecto
+    // ✅ USUARIOS POR DEFECTO (ORIGINAL)
     await db.insert('users', {
       'username': 'admin',
       'password': 'admin123',
@@ -214,6 +194,24 @@ await _insertarCategoriasPorDefecto(db);
     print('✅ Tablas creadas exitosamente');
   }
 
+  // ✅ MÉTODO ORIGINAL PARA CATEGORÍAS POR DEFECTO
+  Future<void> _insertarCategoriasPorDefecto(sql.Database db) async {
+    final categorias = [
+      {'nombre': 'Electrónicos', 'colorMaterial': 0xFFFF5722},
+      {'nombre': 'Ropa', 'colorMaterial': 0xFF2196F3},
+      {'nombre': 'Hogar', 'colorMaterial': 0xFF4CAF50},
+      {'nombre': 'Deportes', 'colorMaterial': 0xFF9C27B0},
+      {'nombre': 'Libros', 'colorMaterial': 0xFF607D8B},
+      {'nombre': 'Otros', 'colorMaterial': 0xFF795548},
+    ];
+
+    for (final categoria in categorias) {
+      await db.insert('categorias', categoria, 
+        conflictAlgorithm: sql.ConflictAlgorithm.ignore);
+    }
+  }
+
+  // ✅ MIGRACIÓN ORIGINAL
   Future<void> _onUpgrade(sql.Database db, int oldVersion, int newVersion) async {
     if (_isWeb) return;
     
@@ -229,7 +227,6 @@ await _insertarCategoriasPorDefecto(db);
           folio TEXT NOT NULL UNIQUE
         )
       ''');
-      print('✅ Tabla tickets creada en migración');
     }
     
     if (oldVersion < 3) {
@@ -259,8 +256,6 @@ await _insertarCategoriasPorDefecto(db);
         'nombre': 'Empleado',
         'email': 'empleado@inventario.com'
       });
-      
-      print('✅ Tabla users creada en migración');
     }
     
     if (oldVersion < 4) {
@@ -278,39 +273,221 @@ await _insertarCategoriasPorDefecto(db);
           created_at TEXT NOT NULL
         )
       ''');
-      print('✅ Tabla audit_logs creada en migración');
-    }
-    // ✅ AGREGAR ESTA MIGRACIÓN PARA CATEGORÍAS
-  if (oldVersion < 5) {
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS categorias(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL UNIQUE,
-        descripcion TEXT,
-        color TEXT NOT NULL
-      )
-    ''');
-    
-    // Insertar categorías por defecto
-    final categorias = [
-      {'nombre': 'Electrónicos', 'color': 'FF5722', 'descripcion': 'Productos electrónicos'},
-      {'nombre': 'Ropa', 'color': '2196F3', 'descripcion': 'Prendas de vestir'},
-      {'nombre': 'Hogar', 'color': '4CAF50', 'descripcion': 'Artículos para el hogar'},
-      {'nombre': 'Deportes', 'color': '9C27B0', 'descripcion': 'Equipamiento deportivo'},
-      {'nombre': 'Libros', 'color': '607D8B', 'descripcion': 'Libros y material de lectura'},
-      {'nombre': 'Otros', 'color': '795548', 'descripcion': 'Otras categorías'},
-    ];
-
-    for (final categoria in categorias) {
-      await db.insert('categorias', categoria, 
-        conflictAlgorithm: sql.ConflictAlgorithm.ignore);
     }
     
-    print('✅ Tabla categorías creada en migración');
-  }
+    if (oldVersion < 5) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS categorias(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nombre TEXT NOT NULL UNIQUE,
+          colorMaterial INTEGER NOT NULL
+        )
+      ''');
+      
+      await _insertarCategoriasPorDefecto(db);
+    }
+    
+    print('✅ Migración completada');
   }
 
-  // MÉTODOS PRINCIPALES
+  // ========== MÉTODOS ORIGINALES QUE FUNCIONABAN ==========
+
+  // ✅ MÉTODOS DE ITEMS (ORIGINALES)
+  Future<List<Item>> getItems() async {
+    if (_isWeb) return [];
+    
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query('items', orderBy: 'nombre');
+      return maps.map((map) => Item.fromMap(map)).toList();
+    } catch (e) {
+      print('❌ Error obteniendo items: $e');
+      return [];
+    }
+  }
+
+  // En los métodos insertItem y updateItem del DatabaseHelper, CORREGIR:
+
+Future<int> insertItem(Item item) async {
+  if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+  
+  try {
+    final db = await database;
+    
+    // Check if serial already exists
+    final existing = await itemExists(item.serial);
+    if (existing) {
+      throw Exception('Ya existe un item con el mismo número de serie');
+    }
+
+    return await db.insert('items', {
+      'nombre': item.nombre,
+      'descripcion': item.descripcion,
+      'serial': item.serial,
+      'numeroIdentificacion': item.numeroIdentificacion,
+      'imagenPath': item.imagenUrl,
+      'cantidad': item.cantidad,
+      'precio': item.precio,
+      'categoriaId': item.categoriaId, // ✅ DEJAR COMO STRING, NO CONVERTIR A INT
+      'createdAt': DateTime.now().toIso8601String(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+  } catch (e) {
+    print('❌ Error insertando item: $e');
+    rethrow;
+  }
+}
+
+Future<int> updateItem(Item item) async {
+  if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+  
+  try {
+    final db = await database;
+    
+    if (item.id == null) {
+      throw Exception('No se puede actualizar un item sin ID');
+    }
+
+    // Check if serial already exists (excluding current item)
+    final existing = await itemExists(item.serial, excludeItemId: item.id);
+    if (existing) {
+      throw Exception('Ya existe otro item con el mismo número de serie');
+    }
+
+    return await db.update(
+      'items',
+      {
+        'nombre': item.nombre,
+        'descripcion': item.descripcion,
+        'serial': item.serial,
+        'numeroIdentificacion': item.numeroIdentificacion,
+        'imagenPath': item.imagenUrl,
+        'cantidad': item.cantidad,
+        'precio': item.precio,
+        'categoriaId': item.categoriaId, // ✅ DEJAR COMO STRING, NO CONVERTIR A INT
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [int.parse(item.id!)],
+    );
+  } catch (e) {
+    print('❌ Error actualizando item: $e');
+    rethrow;
+  }
+}
+
+  // En DatabaseHelper - métodos actualizados
+  Future<int> deleteItem(int id) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final db = await database;
+      return await db.delete(
+        'items',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      print('❌ Error eliminando item: $e');
+      rethrow;
+    }
+  }
+
+  Future<int> deleteItemByStringId(String id) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final intId = int.tryParse(id) ?? 0;
+      if (intId == 0) {
+        throw Exception('ID de item inválido: $id');
+      }
+      return await deleteItem(intId);
+    } catch (e) {
+      print('❌ Error eliminando item por string ID: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Item>> searchItems(String query) async {
+    if (_isWeb) return [];
+    
+    try {
+      final db = await database;
+      final searchTerm = query.toLowerCase();
+      
+      final List<Map<String, dynamic>> maps = await db.query(
+        'items',
+        where: 'LOWER(nombre) LIKE ? OR LOWER(serial) LIKE ? OR LOWER(numeroIdentificacion) LIKE ?',
+        whereArgs: ['%$searchTerm%', '%$searchTerm%', '%$searchTerm%'],
+      );
+
+      return maps.map((map) => Item.fromMap(map)).toList();
+    } catch (e) {
+      print('❌ Error en búsqueda: $e');
+      return [];
+    }
+  }
+
+  // ✅ MÉTODOS DE CATEGORÍAS (ORIGINALES)
+  Future<List<Categoria>> getCategorias() async {
+    if (_isWeb) return [];
+    
+    try {
+      final db = await database;
+      final resultados = await db.query('categorias', orderBy: 'nombre');
+      return resultados.map((map) => Categoria.fromMap(map)).toList();
+    } catch (e) {
+      print('❌ Error obteniendo categorías: $e');
+      return [];
+    }
+  }
+
+  Future<int> insertCategoria(Categoria categoria) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final db = await database;
+      return await db.insert('categorias', categoria.toMap());
+    } catch (e) {
+      print('❌ Error insertando categoría: $e');
+      rethrow;
+    }
+  }
+
+  Future<int> updateCategoria(Categoria categoria) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final db = await database;
+      return await db.update(
+        'categorias',
+        categoria.toMap(),
+        where: 'id = ?',
+        whereArgs: [categoria.id],
+      );
+    } catch (e) {
+      print('❌ Error actualizando categoría: $e');
+      rethrow;
+    }
+  }
+
+  Future<int> deleteCategoria(int id) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final db = await database;
+      return await db.delete(
+        'categorias',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      print('❌ Error eliminando categoría: $e');
+      rethrow;
+    }
+  }
+
+  // ✅ MÉTODOS ORIGINALES QUE FUNCIONABAN
   Future<int> insertTicket(TicketVenta ticket) async {
     if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
     
@@ -336,80 +513,6 @@ await _insertarCategoriasPorDefecto(db);
     } catch (e) {
       print('❌ Error obteniendo tickets: $e');
       return [];
-    }
-  }
-
-  Future<List<Item>> getItems() async {
-    if (_isWeb) return [];
-    
-    try {
-      final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query('items');
-      return maps.map((map) => Item.fromMap(map)).toList();
-    } catch (e) {
-      print('❌ Error obteniendo items: $e');
-      return [];
-    }
-  }
-
-  Future<int> insertItem(Item item) async {
-    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
-    
-    try {
-      final db = await database;
-      return await db.insert('items', {
-        'nombre': item.nombre,
-        'descripcion': item.descripcion,
-        'serial': item.serial,
-        'numeroIdentificacion': item.numeroIdentificacion,
-        'imagenPath': item.imagenPath,
-        'cantidad': item.cantidad,
-        'precio': item.precio,
-      });
-    } catch (e) {
-      print('❌ Error insertando item: $e');
-      rethrow;
-    }
-  }
-
-  Future<int> updateItem(Item item) async {
-    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
-    
-    try {
-      final db = await database;
-      return await db.update(
-        'items',
-        {
-          'nombre': item.nombre,
-          'descripcion': item.descripcion,
-          'serial': item.serial,
-          'numeroIdentificacion': item.numeroIdentificacion,
-          'imagenPath': item.imagenPath,
-          'cantidad': item.cantidad,
-          'precio': item.precio,
-        },
-        where: 'id = ?',
-        whereArgs: [item.id],
-      );
-    } catch (e) {
-      print('❌ Error actualizando item: $e');
-      rethrow;
-    }
-  }
-
-  Future<int> deleteItem(int id) async {
-    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
-    
-    try {
-      final db = await database;
-      return await db.delete(
-        'items',
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-    } catch (e) {
-      print('❌ Error eliminando item: $e');
-      rethrow;
     }
   }
 
@@ -476,6 +579,7 @@ await _insertarCategoriasPorDefecto(db);
     }
   }
 
+  // En DatabaseHelper, agregar este método
   Future<List<Map<String, dynamic>>> getAuditStatsByMonth() async {
     if (_isWeb) return [];
     
@@ -497,26 +601,9 @@ await _insertarCategoriasPorDefecto(db);
     }
   }
 
-  Future<List<Item>> searchItems(String query) async {
-    if (_isWeb) return [];
-    
-    try {
-      final db = await database;
-      final searchTerm = query.toLowerCase();
-      
-      final List<Map<String, dynamic>> maps = await db.query(
-        'items',
-        where: 'LOWER(nombre) LIKE ? OR LOWER(serial) LIKE ? OR LOWER(numeroIdentificacion) LIKE ?',
-        whereArgs: ['%$searchTerm%', '%$searchTerm%', '%$searchTerm%'],
-      );
+  // ========== MÉTODOS NUEVOS QUE FALTABAN ==========
 
-      return maps.map((map) => Item.fromMap(map)).toList();
-    } catch (e) {
-      print('❌ Error en búsqueda: $e');
-      return [];
-    }
-  }
-
+  // En DatabaseHelper, agregar este método
   Future<List<String>> getSearchSuggestions(String query) async {
     if (_isWeb) return [];
     
@@ -533,7 +620,7 @@ await _insertarCategoriasPorDefecto(db);
       final suggestions = <String>[];
       for (final map in maps) {
         if (map['nombre'].toString().toLowerCase().contains(query.toLowerCase())) {
-          suggestions.add(map['nombre']);
+          suggestions.add(map['nombre'] as String);
         }
         if (map['serial'].toString().toLowerCase().contains(query.toLowerCase())) {
           suggestions.add('Serial: ${map['serial']}');
@@ -550,6 +637,92 @@ await _insertarCategoriasPorDefecto(db);
     }
   }
 
+  // ✅ GET ITEM BY ID (NUEVO - REQUERIDO)
+  Future<Item?> getItemById(int id) async {
+    if (_isWeb) return null;
+    
+    try {
+      final db = await database;
+      final maps = await db.query(
+        'items',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      
+      if (maps.isNotEmpty) {
+        return Item.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error obteniendo item por ID: $e');
+      return null;
+    }
+  }
+
+  // ✅ ITEM EXISTS (NUEVO - REQUERIDO)
+  Future<bool> itemExists(String serial, {String? excludeItemId}) async {
+    if (_isWeb) return false;
+    
+    try {
+      final db = await database;
+      final where = 'serial = ? ${excludeItemId != null ? 'AND id != ?' : ''}';
+      final whereArgs = excludeItemId != null 
+          ? [serial, int.tryParse(excludeItemId) ?? 0]
+          : [serial];
+      
+      final maps = await db.query(
+        'items',
+        where: where,
+        whereArgs: whereArgs,
+        limit: 1,
+      );
+      
+      return maps.isNotEmpty;
+    } catch (e) {
+      print('❌ Error verificando existencia de item: $e');
+      return false;
+    }
+  }
+
+  // ✅ GET CATEGORIA BY ID (NUEVO - REQUERIDO)
+  Future<Categoria?> getCategoriaById(int id) async {
+    if (_isWeb) return null;
+    
+    try {
+      final db = await database;
+      final maps = await db.query(
+        'categorias',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      
+      if (maps.isNotEmpty) {
+        return Categoria.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error obteniendo categoría por ID: $e');
+      return null;
+    }
+  }
+
+  // ✅ GET ITEMS COUNT (NUEVO - REQUERIDO)
+  Future<int> getItemsCount() async {
+    if (_isWeb) return 0;
+    
+    try {
+      final db = await database;
+      final count = sql.Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM items')
+      );
+      return count ?? 0;
+    } catch (e) {
+      print('❌ Error obteniendo conteo de items: $e');
+      return 0;
+    }
+  }
+
+  // ✅ CERRAR BASE DE DATOS
   Future<void> close() async {
     if (_isWeb) return;
     
@@ -558,63 +731,22 @@ await _insertarCategoriasPorDefecto(db);
       _database = null;
     }
   }
+}
 
-  // ✅ NUEVO: Métodos para categorías
-  Future<List<Categoria>> getCategorias() async {
-    if (_isWeb) return [];
-    
-    try {
-      final db = await database;
-      final resultados = await db.query('categorias', orderBy: 'nombre');
-      return resultados.map((map) => Categoria.fromMap(map)).toList();
-    } catch (e) {
-      print('❌ Error obteniendo categorías: $e');
-      return [];
-    }
+// En una clase de utilidades o en DatabaseHelper
+class TypeUtils {
+  static int safeStringToInt(String? value, {int defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    return int.tryParse(value) ?? defaultValue;
   }
 
-  Future<int> insertCategoria(Categoria categoria) async {
-    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
-    
-    try {
-      final db = await database;
-      return await db.insert('categorias', categoria.toMap());
-    } catch (e) {
-      print('❌ Error insertando categoría: $e');
-      rethrow;
-    }
+  static String safeIntToString(int? value, {String defaultValue = ''}) {
+    if (value == null) return defaultValue;
+    return value.toString();
   }
 
-  Future<int> updateCategoria(Categoria categoria) async {
-    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
-    
-    try {
-      final db = await database;
-      return await db.update(
-        'categorias',
-        categoria.toMap(),
-        where: 'id = ?',
-        whereArgs: [categoria.id],
-      );
-    } catch (e) {
-      print('❌ Error actualizando categoría: $e');
-      rethrow;
-    }
-  }
-
-  Future<int> deleteCategoria(int id) async {
-    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
-    
-    try {
-      final db = await database;
-      return await db.delete(
-        'categorias',
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-    } catch (e) {
-      print('❌ Error eliminando categoría: $e');
-      rethrow;
-    }
+  static int? safeStringToIntNullable(String? value) {
+    if (value == null) return null;
+    return int.tryParse(value);
   }
 }

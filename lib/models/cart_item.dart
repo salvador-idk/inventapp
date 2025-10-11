@@ -1,5 +1,6 @@
+// lib/models/cart_item.dart
 class CartItem {
-  final String id;
+  final String? id; // ✅ AGREGAR ID PARA SQLite
   final String itemId;
   final String nombre;
   final double precio;
@@ -7,7 +8,7 @@ class CartItem {
   final String? imagenUrl;
 
   CartItem({
-    required this.id,
+    this.id,
     required this.itemId,
     required this.nombre,
     required this.precio,
@@ -15,38 +16,64 @@ class CartItem {
     this.imagenUrl,
   });
 
-  // Opcional: Métodos para conversión
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'nombre': nombre,
-      'imagenUrl': imagenUrl,
-      'cantidad': cantidad,
-      'precio': precio,
-      'total': total,
-    };
-  }
-  
-  double get total => precio * cantidad;
-
-  factory CartItem.fromFirestore(Map<String, dynamic> data, String id) {
+  // ✅ AGREGAR MÉTODO COPYWITH
+  CartItem copyWith({
+    String? id,
+    String? itemId,
+    String? nombre,
+    double? precio,
+    int? cantidad,
+    String? imagenUrl,
+  }) {
     return CartItem(
-      id: id,
-      itemId: data['itemId'] ?? '',
-      nombre: data['nombre'] ?? '',
-      precio: (data['precio'] as num?)?.toDouble() ?? 0.0,
-      cantidad: data['cantidad'] ?? 0,
-      imagenUrl: data['imagenUrl'],
+      id: id ?? this.id,
+      itemId: itemId ?? this.itemId,
+      nombre: nombre ?? this.nombre,
+      precio: precio ?? this.precio,
+      cantidad: cantidad ?? this.cantidad,
+      imagenUrl: imagenUrl ?? this.imagenUrl,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  // ✅ MÉTODO TO MAP
+  Map<String, dynamic> toMap() {
     return {
+      if (id != null) 'id': id,
       'itemId': itemId,
       'nombre': nombre,
       'precio': precio,
       'cantidad': cantidad,
       'imagenUrl': imagenUrl,
     };
+  }
+
+  // ✅ FACTORY FROM MAP
+  factory CartItem.fromMap(Map<String, dynamic> map) {
+    return CartItem(
+      id: map['id']?.toString(),
+      itemId: map['itemId'] as String,
+      nombre: map['nombre'] as String,
+      precio: (map['precio'] as num).toDouble(),
+      cantidad: map['cantidad'] as int,
+      imagenUrl: map['imagenUrl'] as String?,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'CartItem(id: $id, itemId: $itemId, nombre: $nombre, precio: $precio, cantidad: $cantidad)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is CartItem &&
+        other.itemId == itemId &&
+        other.nombre == nombre;
+  }
+
+  @override
+  int get hashCode {
+    return itemId.hashCode ^ nombre.hashCode;
   }
 }

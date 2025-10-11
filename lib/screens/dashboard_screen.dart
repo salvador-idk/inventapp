@@ -39,7 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ticket.fecha.month == hoy.month && 
         ticket.fecha.day == hoy.day)
         .fold(0.0, (sum, ticket) => sum + ticket.total);
-    final itemsSinImagen = items.where((item) => item.imagenPath == null).length;
+    final itemsSinImagen = items.where((item) => item.imagenUrl == null).length;
 
     return {
       'totalItems': totalItems,

@@ -311,84 +311,120 @@ class BarChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
-    final textStyle = TextStyle(color: Colors.black, fontSize: 12);
 
-    final barWidth = size.width / data.length - 20;
-    final maxBarHeight = size.height - 60;
-    final barSpacing = 20.0;
+    // ✅ VERSIÓN ALTERNATIVA: Crear TextSpan directamente con estilo
+    TextSpan createTextSpan(String text) {
+      return TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 10,
+          fontFamily: 'Roboto', // ✅ ESPECIFICAR FUENTE
+        ),
+      );
+    }
 
-    var xPos = 30.0;
+    // Resto del código igual...
+    final totalBars = data.length;
+    final availableWidth = size.width - 60;
+    final barWidth = (availableWidth / totalBars) * 0.6;
+    final barSpacing = (availableWidth / totalBars) * 0.4;
+    
+    final maxBarHeight = size.height - 80;
+    var xPos = 40.0;
 
     // Dibujar ejes
     paint.color = Colors.black;
-    paint.strokeWidth = 2;
+    paint.strokeWidth = 1.5;
     canvas.drawLine(
-      Offset(20, size.height - 40),
-      Offset(size.width, size.height - 40),
+      Offset(30, size.height - 50),
+      Offset(size.width - 10, size.height - 50),
       paint,
     );
     canvas.drawLine(
-      Offset(20, 20),
-      Offset(20, size.height - 40),
+      Offset(30, 20),
+      Offset(30, size.height - 50),
       paint,
     );
+
+    // Líneas de referencia
+    paint.color = Colors.grey[300]!;
+    paint.strokeWidth = 0.5;
+    final gridLines = 5;
+    for (int i = 0; i <= gridLines; i++) {
+      final y = size.height - 50 - (maxBarHeight / gridLines * i);
+      canvas.drawLine(Offset(30, y), Offset(size.width - 10, y), paint);
+      
+      final value = (maxValue / gridLines * i).toInt();
+      final valuePainter = TextPainter(
+        text: createTextSpan(value.toString()), // ✅ USAR FUNCIÓN HELPER
+        textDirection: ui.TextDirection.ltr,
+      );
+      valuePainter.layout();
+      valuePainter.paint(canvas, Offset(5, y - valuePainter.height / 2));
+    }
 
     // Dibujar barras
-    final colors = [
-      Colors.green,
-      Colors.blue,
-      Colors.red,
-      Colors.purple,
-      Colors.orange,
-    ];
-
+    final colors = [Colors.green, Colors.blue, Colors.red, Colors.purple, Colors.orange];
     var colorIndex = 0;
     
     data.forEach((label, value) {
-      final barHeight = (value / maxValue) * maxBarHeight;
-      final yPos = size.height - 40 - barHeight;
+      if (maxValue > 0) {
+        final barHeight = (value / maxValue) * maxBarHeight;
+        final yPos = size.height - 50 - barHeight;
 
-      // Dibujar barra
-      paint.color = colors[colorIndex % colors.length];
-      canvas.drawRect(
-        Rect.fromLTWH(xPos, yPos, barWidth, barHeight),
-        paint,
-      );
+        // Barra principal
+        paint.color = colors[colorIndex % colors.length];
+        canvas.drawRect(
+          Rect.fromLTWH(xPos, yPos, barWidth, barHeight),
+          paint,
+        );
 
-      // Dibujar valor - USANDO SETTERS
-      final valuePainter = TextPainter();
-      valuePainter.textDirection = ui.TextDirection.ltr; // ←Setter
-      valuePainter.text = TextSpan(
-        text: value.toString(),
-        style: textStyle,
-      );
-      valuePainter.layout();
-      valuePainter.paint(
-        canvas,
-        Offset(xPos + barWidth / 2 - valuePainter.width / 2, yPos - 20),
-      );
+        // Borde
+        paint.color = Colors.black;
+        paint.style = PaintingStyle.stroke;
+        paint.strokeWidth = 1;
+        canvas.drawRect(
+          Rect.fromLTWH(xPos, yPos, barWidth, barHeight),
+          paint,
+        );
+        paint.style = PaintingStyle.fill;
 
-      // Dibujar label - USANDO SETTERS
-      final labelPainter = TextPainter();
-      labelPainter.textDirection = ui.TextDirection.ltr; // ←Setter
-      labelPainter.text = TextSpan(
-        text: _abbreviateLabel(label),
-        style: textStyle,
-      );
-      labelPainter.layout();
-      labelPainter.paint(
-        canvas,
-        Offset(xPos + barWidth / 2 - labelPainter.width / 2, size.height - 25),
-      );
+        // Valor
+        if (barHeight > 20) {
+          final valuePainter = TextPainter(
+            text: createTextSpan(value.toString()), // ✅ USAR FUNCIÓN HELPER
+            textDirection: ui.TextDirection.ltr,
+          );
+          valuePainter.layout();
+          valuePainter.paint(
+            canvas,
+            Offset(xPos + barWidth / 2 - valuePainter.width / 2, yPos - 15),
+          );
+        }
 
-      xPos += barWidth + barSpacing;
-      colorIndex++;
+        // Etiqueta
+        final labelPainter = TextPainter(
+          text: createTextSpan(_abbreviateLabel(label)), // ✅ USAR FUNCIÓN HELPER
+          textDirection: ui.TextDirection.ltr,
+        );
+        labelPainter.layout();
+        
+        canvas.save();
+        canvas.translate(xPos + barWidth / 2, size.height - 25);
+        canvas.rotate(-0.4);
+        labelPainter.paint(canvas, Offset(-labelPainter.width / 2, 0));
+        canvas.restore();
+
+        xPos += barWidth + barSpacing;
+        colorIndex++;
+      }
     });
   }
 
   String _abbreviateLabel(String label) {
-    if (label.length <= 8) return label;
-    return label.substring(0, 8) + '.';
+    if (label.length <= 6) return label;
+    return label.substring(0, 6);
   }
 
   @override
