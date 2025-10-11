@@ -1,43 +1,82 @@
 # Sistema de Inventario Móvil 📱
 
-Sistema completo de gestión de inventario desarrollado en Flutter.
+Sistema completo de gestión de inventario desarrollado en Flutter con **soporte multiplataforma y sincronización en la nube**.
 
-## 🚀 Características Principales
+## 🚀 Novedades y Mejoras Recientes
 
-- **Gestión de Inventario**: Agregar, editar, eliminar items con imágenes
-- **Sistema de Compras**: Carrito persistente y tickets de venta
-- **Auditoría**: Log completo de todas las acciones del sistema
-- **Dashboard**: Métricas y estadísticas en tiempo real
-- **Alertas de Stock**: Notificaciones de productos con stock bajo
-- **Búsqueda Avanzada**: Filtros por precio, stock y categorías
-- **Etiquetas**: Impresión de etiquetas 5x2.5cm con códigos QR
-- **Base de datos**: SQLite local con persistencia
+### 🔄 **Nueva Arquitectura de Datos**
+- **Sistema Híbrido**: SQLite Local + Firebase Firestore
+- **Sincronización Bidireccional**: Datos disponibles online/offline
+- **Migración Automática**: Transferencia segura de datos entre fuentes
+- **Fallback Inteligente**: Usa SQLite si Firebase no está disponible
 
-## 👥 Roles de Usuario
+### ☁️ **Integración Firebase**
+- **Firestore**: Base de datos en la nube
+- **Autenticación**: Sistema de usuarios escalable  
+- **Storage**: Almacenamiento de imágenes en la nube
 
-- **Administrador**: Acceso completo al sistema (inventario, reportes, auditoría)
-- **Empleado**: Solo módulo de compras y ventas
+### 🎯 **Mejoras en la Gestión de Estado**
+- Provider mejorado con MultiProvider
+- Streams en tiempo real para actualizaciones instantáneas
 
-## 🛠 Tecnologías Utilizadas
+## 📊 Características Principales Actualizadas
 
-- Flutter 3.x
-- SQLite (sqflite)
-- Provider (Gestión de estado)
-- PDF/Printing (Reportes y etiquetas)
-- QR Flutter (Códigos QR)
-- Image Picker (Selección de imágenes)
+### **1. Gestión de Inventario Mejorada**
+- ✅ **Items con categorías dinámicas** y colores personalizados
+- ✅ **Validación en tiempo real** de números de serie únicos
+- ✅ **Subida de imágenes** a Firebase Storage
+- ✅ **Streams en tiempo real** para actualizaciones instantáneas
 
-## 📦 Instalación
+### **2. Sistema de Compras Avanzado**
+- Carrito persistente con sincronización
+- Validación de stock en tiempo real
+- Tickets profesionales con formato PDF
 
-```bash
-# Clonar el repositorio
-git clone https://github.com/tuusuario/inventapp.git
+### **3. Auditoría Completa**
+- ✅ **Log de todas las acciones**: Crear, editar, eliminar items
+- ✅ **Registro de compras** y transacciones
+- ✅ **Seguimiento de usuarios** y horarios
 
-# Entrar al directorio
-cd inventapp
+### **4. Dashboard en Tiempo Real**
+- Métricas actualizadas automáticamente
+- Gráficos de stock y ventas
+- Alertas proactivas de stock bajo
 
-# Instalar dependencias
-flutter pub get
+### **5. Búsqueda y Filtros Mejorados**
+- Búsqueda por texto en múltiples campos
+- Filtros por precio, stock y categorías
+- Búsqueda con sugerencias inteligentes
 
-# Ejecutar la aplicación
-flutter run
+### **6. Sistema de Etiquetas Profesional**
+- **Formatos 5x2.5cm** estándar industrial
+- **Códigos QR** con información completa del producto
+- **Impresión directa** desde la aplicación
+
+## 👥 Roles de Usuario Mejorados
+
+### **Administrador** 🔧
+- Gestión completa de inventario
+- Configuración de Firebase y sincronización
+- Reportes y auditoría detallada
+- Migración de datos local → nube
+- Gestión de categorías y usuarios
+
+### **Empleado** 👤
+- Módulo de compras optimizado
+- Búsqueda rápida de productos
+- Generación de tickets
+- Stock en tiempo real
+
+## 🛠 Stack Tecnológico Actualizado
+
+### **Frontend & UI**
+- **Flutter 3.19+** con Null Safety
+- **Material Design 3** - Diseño moderno
+- **Responsive Design** - Adaptable a tablets
+
+### **Base de Datos**
+```yaml
+dependencies:
+  sqflite: ^2.3.0      # SQLite local
+  cloud_firestore: ^4.9.5  # Firebase Firestore
+  firebase_core: ^2.15.1   # Core de Firebase
