@@ -11,27 +11,6 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
-    dependencies {
-
-  // Import the Firebase BoM
-
-  implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
-
-
-  // TODO: Add the dependencies for Firebase products you want to use
-
-  // When using the BoM, don't specify versions in Firebase dependencies
-
-  implementation("com.google.firebase:firebase-analytics")
-
-
-  // Add the dependencies for any other desired Firebase products
-
-  // https://firebase.google.com/docs/android/setup#available-libraries
-
-}
-
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -48,8 +27,9 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        versionCode = flutter.versionCode ?: 1
+        versionName = flutter.versionName ?: "1.0.0"
+        multiDexEnabled = true // ✅ AGREGAR ESTO
     }
 
     buildTypes {
@@ -57,10 +37,33 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+// ✅ DEPENDENCIAS DEBEN IR FUERA DEL BLOQUE ANDROID
+dependencies {
+    // Import the Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:33.0.0")) // ✅ VERSIÓN COMPATIBLE
+    
+    // Firebase dependencies
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-storage")
+    
+    // MultiDex para evitar el error 64K
+    implementation("androidx.multidex:multidex:2.0.1")
+    
+    // Otras dependencias necesarias
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
 }

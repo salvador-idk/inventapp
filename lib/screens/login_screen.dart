@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/services/database_helper.dart';
-import '/models/user_model.dart'; // Asegúrate de importar el modelo correcto
+import '/models/user_model.dart';
 import 'main_screen.dart';
 import '../providers/auth_provider.dart';
-import '/utils/audit_service.dart'; // ← Agregar esta importación
+import '/utils/audit_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -22,6 +22,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
+      // ✅ VERIFICAR mounted ANTES del primer setState
+      if (!mounted) return;
+      
       setState(() {
         _loading = true;
       });
@@ -33,10 +36,13 @@ class _LoginScreenState extends State<LoginScreen> {
         if (user != null && user.password == _passwordController.text) {
           // Login exitoso
           final authProvider = Provider.of<AuthProvider>(context, listen: false);
-          Provider.of<AuthProvider>(context, listen: false).setCurrentUser(user);
+          authProvider.setCurrentUser(user);
           
           // ✅ LOG DE AUDITORÍA PARA LOGIN
           await AuditService.logLogin(context);
+          
+          // ✅ VERIFICAR mounted ANTES de navegar
+          if (!mounted) return;
           
           Navigator.pushReplacement(
             context,
@@ -44,6 +50,9 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         } else {
           // Credenciales incorrectas
+          // ✅ VERIFICAR mounted ANTES de mostrar snackbar
+          if (!mounted) return;
+          
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Usuario o contraseña incorrectos'),
@@ -52,6 +61,9 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } catch (e) {
+        // ✅ VERIFICAR mounted ANTES de manejar errores
+        if (!mounted) return;
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al iniciar sesión: $e'),
@@ -59,11 +71,22 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       } finally {
+        // ✅ VERIFICAR mounted ANTES del último setState
+        if (!mounted) return;
+        
         setState(() {
           _loading = false;
         });
       }
     }
+  }
+
+  // ✅ AGREGAR dispose PARA LIMPIAR CONTROLLERS
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -76,17 +99,15 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // ✅ Reemplaza el FlutterLogo con tu logo
               Image.asset(
                 'assets/images/logo.png',
                 height: 120,
                 width: 120,
                 errorBuilder:(context, error, stackTrace){
-                  return Icon(Icons.inventory_2, size: 100); //Fallback si la imagen no carga
+                  return const Icon(Icons.inventory_2, size: 100);
                 },
               ),
-              //const FlutterLogo(size: 100),
-              //const SizedBox(height: 30),
+              const SizedBox(height: 16),
               const Text(
                 'Sistema de Inventario',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
