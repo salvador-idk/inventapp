@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:inventario_app/services/data_repository.dart';
 import '/services/database_helper.dart';
 import '/models/item_model.dart';
 import '/services/firestore_service.dart';
@@ -10,29 +11,40 @@ class InventoryService {
   static bool _isInitialized = false;
   static bool _firebaseAvailable = false;
   static DataSource dataSource = DataSource.sqlite;
-  
+
+  final DataRepository repository;
   bool _useFirebase = false;
-  
-  factory InventoryService() {
-    return _instance ??= InventoryService._internal();
+
+  // ✅ CONSTRUCTOR PÚBLICO CORREGIDO - eliminar el factory conflictivo
+  InventoryService({required this.repository});
+
+  // ✅ SINGLETON PATTERN MEJORADO
+  static InventoryService get instance {
+    if (_instance == null) {
+      throw Exception('InventoryService no ha sido inicializado. Llama a initialize() primero.');
+    }
+    return _instance!;
   }
-  
-  InventoryService._internal();
-  
-  static Future<void> initialize({bool forceReinitialize = false}) async {
-    if (_isInitialized && !forceReinitialize) return;
+
+  // ✅ INICIALIZACIÓN ESTÁTICA MEJORADA
+  static Future<InventoryService> initialize({required DataRepository repository, bool forceReinitialize = false}) async {
+    if (_isInitialized && !forceReinitialize && _instance != null) {
+      return _instance!;
+    }
     
-    _instance ??= InventoryService._internal();
+    _instance = InventoryService(repository: repository);
     await _instance!._initialize();
     _isInitialized = true;
+    
+    return _instance!;
   }
-  
+
+  // ✅ MÉTODO DE INSTANCIA PARA INICIALIZACIÓN
   Future<void> _initialize() async {
     print('🔄 Inicializando InventoryService...');
     
     // Verificar si Firebase está disponible
     try {
-      // Test Firebase connection with better error handling
       _useFirebase = await _testFirebaseConnectionWithTimeout();
       
       if (_useFirebase) {
@@ -97,7 +109,7 @@ class InventoryService {
 
   // ✅ ITEM EXISTS METHOD
   Future<bool> itemExists(String serial, {String? excludeItemId}) async {
-    if (!_isInitialized) await initialize();
+    if (!_isInitialized) await _initialize();
     
     try {
       if (dataSource == DataSource.firestore) {
@@ -114,7 +126,7 @@ class InventoryService {
   // ✅ STREAM MEJORADO PARA SQLite
   Stream<List<Item>> getItemsStream() {
     if (!_isInitialized) {
-      return Stream.fromFuture(initialize()).asyncExpand((_) => getItemsStream());
+      return Stream.fromFuture(_initialize()).asyncExpand((_) => getItemsStream());
     }
     
     if (dataSource == DataSource.firestore) {
@@ -164,7 +176,7 @@ class InventoryService {
 
   // ✅ AGREGAR ITEM CON MEJOR MANEJO DE ERRORES
   Future<String> addItem(Item item) async {
-    if (!_isInitialized) await initialize();
+    if (!_isInitialized) await _initialize();
     
     try {
       String itemId;
@@ -187,7 +199,7 @@ class InventoryService {
 
   // ✅ ACTUALIZAR ITEM
   Future<void> updateItem(Item item) async {
-    if (!_isInitialized) await initialize();
+    if (!_isInitialized) await _initialize();
     
     if (item.id == null) {
       throw Exception('No se puede actualizar un item sin ID');
@@ -208,7 +220,7 @@ class InventoryService {
 
   // ✅ ELIMINAR ITEM CON VALIDACIÓN
   Future<void> deleteItem(String itemId) async {
-    if (!_isInitialized) await initialize();
+    if (!_isInitialized) await _initialize();
     
     if (itemId.isEmpty) {
       throw Exception('ID de item inválido');
@@ -229,7 +241,7 @@ class InventoryService {
 
   // ✅ BÚSQUEDA MEJORADA
   Future<List<Item>> searchItems(String query) async {
-    if (!_isInitialized) await initialize();
+    if (!_isInitialized) await _initialize();
     
     if (query.length < 2) {
       return []; // No buscar con queries muy cortas
@@ -254,7 +266,7 @@ class InventoryService {
 
   // ✅ OBTENER ITEM POR ID
   Future<Item?> getItemById(String itemId) async {
-    if (!_isInitialized) await initialize();
+    if (!_isInitialized) await _initialize();
     
     try {
       if (dataSource == DataSource.firestore) {
@@ -270,7 +282,7 @@ class InventoryService {
 
   // ✅ OBTENER TODOS LOS ITEMS (PARA OPERACIONES POR LOTES)
   Future<List<Item>> getAllItems() async {
-    if (!_isInitialized) await initialize();
+    if (!_isInitialized) await _initialize();
     
     try {
       if (dataSource == DataSource.firestore) {
@@ -285,7 +297,7 @@ class InventoryService {
   }
 
   // ✅ TEST DE CONEXIÓN MEJORADO
-  static Future<bool> testFirebaseConnection() async {
+  Future<bool> testFirebaseConnection() async {
     try {
       _firebaseAvailable = await FirestoreService.testConnection();
       
@@ -424,7 +436,15 @@ class InventoryService {
     _firebaseAvailable = false;
     dataSource = DataSource.sqlite;
     _useFirebase = false;
-    await initialize(forceReinitialize: true);
+    await _initialize();
+  }
+
+  // ✅ DISPOSE PARA LIMPIAR RECURSOS
+  void dispose() {
+    _isInitialized = false;
+    _firebaseAvailable = false;
+    _instance = null;
+    print('🧹 InventoryService disposed');
   }
 }
 
@@ -469,6 +489,9 @@ class MigrationResult {
       'hasErrors': hasErrors,
     };
   }
-  // Global instance for easy access
-  final inventoryService = InventoryService();
 }
+
+// ✅ INSTANCIA GLOBAL MEJORADA - fuera de la clase
+final InventoryService inventoryService = InventoryService(
+  repository: DataRepository(), // Esto se sobreescribirá en main.dart
+);

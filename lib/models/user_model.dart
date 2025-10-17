@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class AppUser {
   int? id;
   String username;
@@ -14,6 +16,30 @@ class AppUser {
     required this.nombre,
     this.email,
   });
+
+  // ✅ FROM FIRESTORE - NUEVO MÉTODO
+  factory AppUser.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return AppUser(
+      id: null, // Firestore usa su propio ID, no necesitamos mapearlo aquí
+      username: data['username'] ?? '',
+      password: data['password'] ?? '',
+      role: data['role'] ?? 'empleado',
+      nombre: data['nombre'] ?? '',
+      email: data['email'],
+    );
+  }
+
+  // ✅ TO FIRESTORE - NUEVO MÉTODO
+  Map<String, dynamic> toFirestore() {
+    return {
+      'username': username,
+      'password': password,
+      'role': role,
+      'nombre': nombre,
+      'email': email,
+    };
+  }
 
   Map<String, dynamic> toMap() {
     return {

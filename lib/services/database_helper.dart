@@ -429,6 +429,24 @@ Future<int> updateItem(Item item) async {
   }
 
   // ✅ MÉTODOS DE CATEGORÍAS (ORIGINALES)
+  // En tu DatabaseHelper, actualiza los métodos de categorías:
+
+  Future<int> insertCategoria(Categoria categoria) async {
+    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
+    
+    try {
+      final db = await database;
+      return await db.insert('categorias', {
+        'nombre': categoria.nombre,
+        'descripcion': categoria.descripcion ?? '',
+        'color': categoria.color,
+      });
+    } catch (e) {
+      print('❌ Error insertando categoría: $e');
+      rethrow;
+    }
+  }
+
   Future<List<Categoria>> getCategorias() async {
     if (_isWeb) return [];
     
@@ -442,32 +460,49 @@ Future<int> updateItem(Item item) async {
     }
   }
 
-  Future<int> insertCategoria(Categoria categoria) async {
-    if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
-    
-    try {
-      final db = await database;
-      return await db.insert('categorias', categoria.toMap());
-    } catch (e) {
-      print('❌ Error insertando categoría: $e');
-      rethrow;
-    }
-  }
-
   Future<int> updateCategoria(Categoria categoria) async {
     if (_isWeb) throw UnsupportedError('Usa FirestoreService en web');
     
     try {
       final db = await database;
+      if (categoria.sqlId == null) {
+        throw Exception('No se puede actualizar categoría sin ID SQL');
+      }
+      
       return await db.update(
         'categorias',
-        categoria.toMap(),
+        {
+          'nombre': categoria.nombre,
+          'descripcion': categoria.descripcion ?? '',
+          'color': categoria.color,
+        },
         where: 'id = ?',
-        whereArgs: [categoria.id],
+        whereArgs: [categoria.sqlId],
       );
     } catch (e) {
       print('❌ Error actualizando categoría: $e');
       rethrow;
+    }
+  }
+
+  Future<Categoria?> getCategoriaById(int id) async {
+    if (_isWeb) return null;
+    
+    try {
+      final db = await database;
+      final maps = await db.query(
+        'categorias',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      
+      if (maps.isNotEmpty) {
+        return Categoria.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error obteniendo categoría por ID: $e');
+      return null;
     }
   }
 
@@ -681,28 +716,6 @@ Future<int> updateItem(Item item) async {
     } catch (e) {
       print('❌ Error verificando existencia de item: $e');
       return false;
-    }
-  }
-
-  // ✅ GET CATEGORIA BY ID (NUEVO - REQUERIDO)
-  Future<Categoria?> getCategoriaById(int id) async {
-    if (_isWeb) return null;
-    
-    try {
-      final db = await database;
-      final maps = await db.query(
-        'categorias',
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      
-      if (maps.isNotEmpty) {
-        return Categoria.fromMap(maps.first);
-      }
-      return null;
-    } catch (e) {
-      print('❌ Error obteniendo categoría por ID: $e');
-      return null;
     }
   }
 

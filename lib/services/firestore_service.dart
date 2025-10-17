@@ -1,19 +1,30 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/models/item_model.dart';
+import '/models/categoria_model.dart';
+import '/models/user_model.dart';
+import '/models/audit_model.dart';
+import '/models/ticket_model.dart';
 
 class FirestoreService {
   // ✅ DEFINE FIRESTORE REFERENCES
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final CollectionReference _itemsRef = _firestore.collection('items');
+  static final CollectionReference _categoriesRef = _firestore.collection('categorias');
+  static final CollectionReference _ticketsRef = _firestore.collection('tickets');
+  static final CollectionReference _usersRef = _firestore.collection('users');
+  static final CollectionReference _auditLogsRef = _firestore.collection('audit_logs');
   
-  // ✅ STREAM METHODS
+  // ✅ STREAM METHODS CORREGIDOS
   static Stream<List<Item>> getItemsStream() {
     try {
       return _itemsRef
           .orderBy('nombre')
           .snapshots()
           .map((snapshot) => snapshot.docs
-              .map((doc) => Item.fromFirestore(doc))
+              .map((doc) {
+                final data = doc.data() as Map<String, dynamic>? ?? {};
+                return Item.fromFirestore(doc); // ✅ CORREGIDO
+              })
               .toList());
     } catch (e) {
       print('❌ Error en getItemsStream: $e');
@@ -53,7 +64,7 @@ class FirestoreService {
     }
   }
 
-  // ✅ QUERY METHODS
+  // ✅ QUERY METHODS CORREGIDOS
   static Future<Item?> getItemById(String itemId) async {
     try {
       if (itemId.isEmpty) return null;
@@ -61,7 +72,7 @@ class FirestoreService {
       final doc = await _itemsRef.doc(itemId).get();
       
       if (doc.exists) {
-        return Item.fromFirestore(doc);
+        return Item.fromFirestore(doc); // ✅ CORREGIDO
       } else {
         print('❌ Item no encontrado con ID: $itemId');
         return null;
@@ -76,7 +87,7 @@ class FirestoreService {
     try {
       final querySnapshot = await _itemsRef.get();
       return querySnapshot.docs
-          .map((doc) => Item.fromFirestore(doc))
+          .map((doc) => Item.fromFirestore(doc)) // ✅ CORREGIDO
           .toList();
     } catch (e) {
       print('❌ Error obteniendo todos los items: $e');
@@ -112,7 +123,7 @@ class FirestoreService {
       
       for (final querySnapshot in results) {
         for (final doc in querySnapshot.docs) {
-          final item = Item.fromFirestore(doc);
+          final item = Item.fromFirestore(doc); // ✅ CORREGIDO
           if (!seenIds.contains(item.id)) {
             seenIds.add(item.id!);
             allItems.add(item);
@@ -164,14 +175,14 @@ class FirestoreService {
 
   // ✅ STATISTICS METHODS
   static Future<int> getItemsCount() async {
-  try {
-    final aggregateQuery = await _itemsRef.count().get();
-    return aggregateQuery.count ?? 0; // ✅ PROVIDE DEFAULT VALUE
-  } catch (e) {
-    print('❌ Error obteniendo conteo de items: $e');
-    return 0; // ✅ RETURN 0 ON ERROR
+    try {
+      final aggregateQuery = await _itemsRef.count().get();
+      return aggregateQuery.count ?? 0;
+    } catch (e) {
+      print('❌ Error obteniendo conteo de items: $e');
+      return 0;
+    }
   }
-}
 
   static Future<Map<String, dynamic>> getInventoryStats() async {
     try {
@@ -199,16 +210,153 @@ class FirestoreService {
     }
   }
 
+  // ========== CATEGORY METHODS CORREGIDOS ==========
+  static Future<List<Categoria>> getCategorias() async {
+    try {
+      final querySnapshot = await _categoriesRef.orderBy('nombre').get();
+      return querySnapshot.docs
+          .map((doc) => Categoria.fromFirestore(doc)) // ✅ CORREGIDO
+          .toList();
+    } catch (e) {
+      print('❌ Error obteniendo categorías: $e');
+      return [];
+    }
+  }
+
+  static Future<String> addCategoria(Categoria categoria) async {
+    try {
+      final docRef = await _categoriesRef.add(categoria.toFirestore());
+      return docRef.id;
+    } catch (e) {
+      print('❌ Error agregando categoría: $e');
+      throw Exception('No se pudo agregar la categoría: $e');
+    }
+  }
+
+  static Future<void> updateCategoria(Categoria categoria) async {
+    try {
+      if (categoria.id == null || categoria.id!.isEmpty) {
+        throw Exception('Categoría ID es requerido para actualizar');
+      }
+      await _categoriesRef.doc(categoria.id).update(categoria.toFirestore());
+    } catch (e) {
+      print('❌ Error actualizando categoría ${categoria.id}: $e');
+      throw Exception('No se pudo actualizar la categoría: $e');
+    }
+  }
+
+  static Future<Categoria?> getCategoriaById(String id) async {
+    try {
+      final doc = await _categoriesRef.doc(id).get();
+      if (doc.exists) {
+        return Categoria.fromFirestore(doc); // ✅ CORREGIDO
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error obteniendo categoría por ID $id: $e');
+      return null;
+    }
+  }
+
+  static Future<void> deleteCategoria(String categoriaId) async {
+    try {
+      await _categoriesRef.doc(categoriaId).delete();
+    } catch (e) {
+      print('❌ Error eliminando categoría $categoriaId: $e');
+      throw Exception('No se pudo eliminar la categoría: $e');
+    }
+  }
+
+  // ========== TICKET METHODS CORREGIDOS ==========
+  static Future<String> addTicket(TicketVenta ticket) async {
+    try {
+      final docRef = await _ticketsRef.add(ticket.toFirestore());
+      return docRef.id;
+    } catch (e) {
+      print('❌ Error agregando ticket: $e');
+      throw Exception('No se pudo agregar el ticket: $e');
+    }
+  }
+
+  static Future<List<TicketVenta>> getTickets() async {
+    try {
+      final querySnapshot = await _ticketsRef
+          .orderBy('fecha', descending: true)
+          .get();
+      return querySnapshot.docs
+          .map((doc) => TicketVenta.fromFirestore(doc)) // ✅ CORREGIDO
+          .toList();
+    } catch (e) {
+      print('❌ Error obteniendo tickets: $e');
+      return [];
+    }
+  }
+
+  // ========== USER METHODS CORREGIDOS ==========
+  static Future<AppUser?> getUserByUsername(String username) async {
+    try {
+      final querySnapshot = await _usersRef
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+      
+      if (querySnapshot.docs.isNotEmpty) {
+        return AppUser.fromFirestore(querySnapshot.docs.first); // ✅ CORREGIDO
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error obteniendo usuario: $e');
+      return null;
+    }
+  }
+
+  // ========== AUDIT METHODS CORREGIDOS ==========
+  static Future<String> addAuditLog(AuditLog auditLog) async {
+    try {
+      final docRef = await _auditLogsRef.add(auditLog.toFirestore());
+      return docRef.id;
+    } catch (e) {
+      print('❌ Error agregando log de auditoría: $e');
+      throw Exception('No se pudo agregar el log de auditoría: $e');
+    }
+  }
+
+  static Future<List<AuditLog>> getAuditLogs({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      Query query = _auditLogsRef.orderBy('createdAt', descending: true);
+
+      if (startDate != null && endDate != null) {
+        query = query
+            .where('createdAt', isGreaterThanOrEqualTo: startDate)
+            .where('createdAt', isLessThanOrEqualTo: endDate);
+      }
+
+      final querySnapshot = await query.get();
+      return querySnapshot.docs
+          .map((doc) => AuditLog.fromFirestore(doc)) // ✅ CORREGIDO
+          .toList();
+    } catch (e) {
+      print('❌ Error obteniendo logs de auditoría: $e');
+      return [];
+    }
+  }
+
   // ✅ UTILITY METHODS
   static Future<bool> testConnection() async {
     try {
-      await _firestore.collection('test').limit(1).get();
+      // Test más rápido y confiable
+      await _firestore.collection('connection_test')
+          .limit(1)
+          .get(const GetOptions(source: Source.server));
       return true;
     } catch (e) {
       print('❌ Error probando conexión Firebase: $e');
       return false;
     }
-  }
+}
 
   // ✅ BACKUP/RESTORE METHODS (OPTIONAL)
   static Future<void> backupData() async {
@@ -245,6 +393,108 @@ class FirestoreService {
       print('✅ ${orphanedQuery.docs.length} items huérfanos eliminados');
     } catch (e) {
       print('❌ Error en limpieza: $e');
+    }
+  }
+
+  // ✅ INITIALIZATION METHODS
+  static Future<void> initializeDefaultData() async {
+    try {
+      // Verificar si ya existen categorías
+      final categoriasSnapshot = await _categoriesRef.get();
+      if (categoriasSnapshot.docs.isEmpty) {
+        await _insertarCategoriasPorDefecto();
+      }
+
+      // Verificar si ya existen usuarios
+      final usersSnapshot = await _usersRef.get();
+      if (usersSnapshot.docs.isEmpty) {
+        await _insertarUsuariosPorDefecto();
+      }
+    } catch (e) {
+      print('❌ Error inicializando datos por defecto: $e');
+    }
+  }
+
+  static Future<void> _insertarCategoriasPorDefecto() async {
+    final categorias = [
+      {
+        'nombre': 'Electrónicos', 
+        'descripcion': 'Dispositivos y componentes electrónicos',
+        'color': 'FF5722'
+      },
+      {
+        'nombre': 'Ropa', 
+        'descripcion': 'Prendas de vestir y accesorios',
+        'color': '2196F3'
+      },
+      {
+        'nombre': 'Hogar', 
+        'descripcion': 'Artículos para el hogar',
+        'color': '4CAF50'
+      },
+      {
+        'nombre': 'Deportes', 
+        'descripcion': 'Equipamiento deportivo',
+        'color': '9C27B0'
+      },
+      {
+        'nombre': 'Libros', 
+        'descripcion': 'Libros y material de lectura',
+        'color': '607D8B'
+      },
+      {
+        'nombre': 'Otros', 
+        'descripcion': 'Otras categorías',
+        'color': '795548'
+      },
+    ];
+
+    for (final categoria in categorias) {
+      await _categoriesRef.add(categoria);
+    }
+    print('✅ ${categorias.length} categorías por defecto insertadas');
+  }
+
+  static Future<void> _insertarUsuariosPorDefecto() async {
+    final usuarios = [
+      {
+        'username': 'admin',
+        'password': 'admin123',
+        'role': 'admin',
+        'nombre': 'Administrador',
+        'email': 'admin@inventario.com'
+      },
+      {
+        'username': 'empleado',
+        'password': 'empleado123',
+        'role': 'empleado',
+        'nombre': 'Empleado',
+        'email': 'empleado@inventario.com'
+      },
+    ];
+
+    for (final usuario in usuarios) {
+      await _usersRef.add(usuario);
+    }
+    print('✅ ${usuarios.length} usuarios por defecto insertados');
+  }
+
+  // ✅ MÉTODO PARA VERIFICAR ESTRUCTURA DE DATOS
+  static Future<void> checkDataStructure() async {
+    try {
+      print('🔍 Verificando estructura de datos en Firestore...');
+      
+      final categorias = await getCategorias();
+      print('📊 Categorías en Firestore: ${categorias.length}');
+      
+      final items = await getAllItems();
+      print('📦 Items en Firestore: ${items.length}');
+      
+      final usersCount = await _usersRef.count().get();
+      print('👥 Usuarios en Firestore: ${usersCount.count}');
+      
+    } catch (e) {
+      print('❌ Error verificando estructura de datos: $e');
     }
   }
 }

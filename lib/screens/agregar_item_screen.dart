@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:provider/provider.dart';
-import '/services/database_helper.dart';
+import '/services/data_repository.dart'; // ✅ AGREGAR ESTA IMPORTACIÓN
 import '/services/inventory_service.dart';
 import '/models/item_model.dart';
 import '/models/categoria_model.dart';
@@ -50,6 +50,11 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     return Provider.of<InventoryService>(context, listen: false);
   }
 
+  // ✅ GET DATA REPOSITORY INSTANCE
+  DataRepository get _dataRepository {
+    return DataRepository();
+  }
+
   @override
   void initState(){
     super.initState();
@@ -63,13 +68,22 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
 
   Future<void> _cargarCategorias() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final categorias = await dbHelper.getCategorias();
+      // ✅ USAR DATA REPOSITORY EN LUGAR DE DATABASE HELPER DIRECTAMENTE
+      final categorias = await _dataRepository.getCategorias();
       setState(() {
         _categorias = categorias;
       });
     } catch (e) {
       print('Error cargando categorías: $e');
+      // Mostrar snackbar de error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cargando categorías: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -86,16 +100,16 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     if (item.categoriaId != null && item.categoriaId!.isNotEmpty) {
       // Buscar la categoría que coincida (el ID en la base de datos es int, pero en Item es String)
       final categoriaEncontrada = _categorias.firstWhere(
-        (categoria) => categoria.id?.toString() == item.categoriaId,
+        (categoria) => categoria.unifiedId == item.categoriaId,
         orElse: () => Categoria(
-          id: -1, 
+          id: '-1', 
           nombre: 'No encontrada', 
           color: 'FF0000' // Rojo para indicar error
         ),
       );
       
-      if (categoriaEncontrada.id != -1) {
-        _categoriaSeleccionada = categoriaEncontrada.id?.toString();
+      if (categoriaEncontrada.id != '-1') {
+        _categoriaSeleccionada = categoriaEncontrada.unifiedId;
       } else {
         // Si no se encuentra, usar el valor original
         _categoriaSeleccionada = item.categoriaId;
@@ -363,7 +377,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
 
   // ✅ DROPDOWN DE CATEGORÍAS
   Widget _buildCategoriaDropdown() {
-  // Filtrar categorías para eliminar duplicados
+    // Filtrar categorías para eliminar duplicados
     final categoriasUnicas = _eliminarCategoriasDuplicadas(_categorias);
     
     return DropdownButtonFormField<String>(
@@ -378,8 +392,8 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
           child: Text('Sin categoría'),
         ),
         ...categoriasUnicas.map((categoria) {
-          // ✅ USAR EL GETTER colorMaterial DE TU MODELO
-          final valorUnico = categoria.id?.toString() ?? 'null_${categoria.nombre}';
+          // ✅ USAR EL unifiedId PARA CONSISTENCIA
+          final valorUnico = categoria.unifiedId;
           
           return DropdownMenuItem(
             value: valorUnico,
@@ -389,7 +403,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
                   width: 16,
                   height: 16,
                   decoration: BoxDecoration(
-                    color: categoria.colorMaterial, // ✅ Usar el getter colorMaterial
+                    color: categoria.colorMaterial,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -413,29 +427,18 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     final mapaUnico = <String, Categoria>{};
     
     for (final categoria in categorias) {
-      final clave = categoria.id?.toString() ?? categoria.nombre;
+      final clave = categoria.unifiedId;
       if (!mapaUnico.containsKey(clave)) {
         mapaUnico[clave] = categoria;
       } else {
-        print('⚠️ Categoría duplicada eliminada: ${categoria.nombre} (ID: ${categoria.id})');
+        print('⚠️ Categoría duplicada eliminada: ${categoria.nombre} (ID: ${categoria.unifiedId})');
       }
     }
     
     return mapaUnico.values.toList();
   }
 
-  // ✅ VALIDACIÓN MEJORADA PARA SERIAL
-  String? _validarSerial(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Por favor ingrese el número de serie';
-    }
-    if (value.length < 2) {
-      return 'El número de serie debe tener al menos 2 caracteres';
-    }
-    return null;
-  }
-
-  // ✅ MEJORAR LIMPIAR FORMULARIO CON CONFIRMACIÓN
+  // ✅ MÉTODO PARA LIMPIAR FORMULARIO CON CONFIRMACIÓN
   void _limpiarFormulario() {
     if (_nombreController.text.isNotEmpty || 
         _descripcionController.text.isNotEmpty ||
@@ -466,6 +469,7 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     }
   }
 
+  // ✅ MÉTODO PARA REALIZAR LA LIMPIEZA
   void _realizarLimpiezaFormulario() {
     _formKey.currentState!.reset();
     _nombreController.clear();
@@ -480,6 +484,99 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
       _imagenRequerida = false;
       _categoriaSeleccionada = null;
     });
+  }
+
+  // ✅ MÉTODO DE VALIDACIÓN PARA SERIAL (también podría faltar)
+  String? _validarSerial(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Por favor ingrese el número de serie';
+    }
+    if (value.length < 2) {
+      return 'El número de serie debe tener al menos 2 caracteres';
+    }
+    return null;
+  }
+
+  // ✅ MÉTODO PARA MANEJAR ERRORES DE ELIMINACIÓN
+  void _manejarErrorEliminacion(dynamic e, BuildContext context) {
+    String mensaje = 'Error al eliminar: ${e.toString()}';
+    
+    if (e.toString().contains('permission-denied')) {
+      mensaje = 'Error de permisos: No tienes acceso para eliminar items';
+    } else if (e.toString().contains('network-request-failed')) {
+      mensaje = 'Error de red: Verifica tu conexión a internet';
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Entendido',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
+
+  // ✅ MÉTODO PARA ELIMINAR ITEM
+  Future<void> _eliminarItem() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar Item'),
+        content: const Text('¿Estás seguro de que quieres eliminar este item? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        setState(() {
+          _guardando = true;
+        });
+
+        // ✅ Asegurar que el ID sea String
+        final itemId = widget.itemParaEditar!.id;
+        if (itemId == null) {
+          throw Exception('El item no tiene ID');
+        }
+
+        // ✅ FIXED: Use instance method instead of static
+        await _inventoryService.deleteItem(itemId);
+
+        // ✅ LOG DE AUDITORÍA PARA ELIMINACIÓN - CONVERSIÓN SEGURA A INT
+        await AuditService.logItemDelete(
+          context,
+          itemId: _safeStringToInt(itemId), // ✅ CONVERSIÓN SEGURA
+          itemName: widget.itemParaEditar!.nombre,
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Item eliminado exitosamente')),
+        );
+
+        Navigator.of(context).pop(true);
+      } catch (e) {
+        setState(() {
+          _guardando = false;
+        });
+        _manejarErrorEliminacion(e, context);
+      }
+    }
   }
 
   @override
@@ -748,84 +845,5 @@ class _AgregarItemScreenState extends State<AgregarItemScreen> {
     );
   }
 
-  // ✅ MÉTODO PARA MANEJAR ERRORES DE ELIMINACIÓN
-  void _manejarErrorEliminacion(dynamic e, BuildContext context) {
-    String mensaje = 'Error al eliminar: ${e.toString()}';
-    
-    if (e.toString().contains('permission-denied')) {
-      mensaje = 'Error de permisos: No tienes acceso para eliminar items';
-    } else if (e.toString().contains('network-request-failed')) {
-      mensaje = 'Error de red: Verifica tu conexión a internet';
-    }
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(
-          label: 'Entendido',
-          textColor: Colors.white,
-          onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          },
-        ),
-      ),
-    );
-  }
-
-  Future<void> _eliminarItem() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar Item'),
-        content: const Text('¿Estás seguro de que quieres eliminar este item? Esta acción no se puede deshacer.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      try {
-        setState(() {
-          _guardando = true;
-        });
-
-        // ✅ Asegurar que el ID sea String
-        final itemId = widget.itemParaEditar!.id;
-        if (itemId == null) {
-          throw Exception('El item no tiene ID');
-        }
-
-        // ✅ FIXED: Use instance method instead of static
-        await _inventoryService.deleteItem(itemId);
-
-        // ✅ LOG DE AUDITORÍA PARA ELIMINACIÓN - CONVERSIÓN SEGURA A INT
-        await AuditService.logItemDelete(
-          context,
-          itemId: _safeStringToInt(itemId), // ✅ CONVERSIÓN SEGURA
-          itemName: widget.itemParaEditar!.nombre,
-        );
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Item eliminado exitosamente')),
-        );
-
-        Navigator.of(context).pop(true);
-      } catch (e) {
-        setState(() {
-          _guardando = false;
-        });
-        _manejarErrorEliminacion(e, context);
-      }
-    }
-  }
+  // ... (los métodos _manejarErrorEliminacion y _eliminarItem se mantienen igual)
 }

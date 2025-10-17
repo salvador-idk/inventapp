@@ -37,7 +37,7 @@ class _MainScreenState extends State<MainScreen> {
   // ✅ VERIFICAR ESTADO DE FIREBASE
   Future<void> _checkFirebaseStatus() async {
     try {
-      final isConnected = await InventoryService.testFirebaseConnection();
+      final isConnected = await _inventoryService.testFirebaseConnection();
       setState(() {
         _firebaseStatus = isConnected ? '✅ Conectado' : '❌ No conectado';
       });

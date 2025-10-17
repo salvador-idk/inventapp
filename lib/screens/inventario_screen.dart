@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:inventario_app/widgets/inventory/responsive_inventory_display.dart';
 import 'package:provider/provider.dart';
 import '/services/database_helper.dart';
 import '/services/inventory_service.dart'; // ✅ USAR INVENTORY SERVICE
@@ -878,13 +879,13 @@ class _InventarioScreenState extends State<InventarioScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredItems.isEmpty
                     ? _buildEmptyState()
-                    : ListView.builder(
-                        itemCount: _filteredItems.length,
-                        itemBuilder: (context, index) {
-                          final item = _filteredItems[index];
-                          return _buildItemCard(item);
-                        },
-                      ),
+                    : ResponsiveInventoryDisplay(
+                        items: _filteredItems,
+                        onItemTap: _mostrarDetallesItem,
+                        onItemEdit: _editarItem,
+                        onItemDelete: _eliminarItem,
+                        onPrintLabel: _imprimirEtiquetaExistente,
+                      )
           ),
         ],
       ),
